@@ -110,6 +110,11 @@ label variable lastfollowupyear "Follow-up or death(years)"
 label variable anyemergency "Any Emergency Visits in Follow-up?"
 label variable anyadmission "Any Hospital Admission in Follow-up?"
 
+gen time_of_death = lastfollowupyear if death == 1
+label variable time_of_death "Time of Death"
+gen time_of_censoring = lastfollowupyear if death != 1
+label variable time_of_censoring "Time of longest follow-up alive"
+
 
 //Categorizations of continuous variables
 
@@ -205,6 +210,8 @@ enlargedratio cat %4.1f \ ///
 anyemergency bin %4.1f \ /// 
 anyadmission bin %4.1f \ /// 
 death bin %4.1f \ /// 
+time_of_death conts %4.1f \ /// 
+time_of_death conts %4.1f \ /// 
 ) ///
 percent_n percsign("%") iqrmiddle(",") sdleft(" (±") sdright(")") onecol total(before) ///
 saving("Results and Figures/$S_DATE/Table 1 PA enlargement by Age.xlsx", replace)
@@ -223,25 +230,37 @@ ridgeline mpaaa, by(age_decade) yline ylw(0.2) overlap(1.7) ylc(blue) ylp(dot) /
 	labpos(right) bwid(0.05) laboffset(-0.05) showstats xlabel(0.6(.1)1.3) ///
 	palette(CET C6) alpha(75) xtitle("PA:AA Ratio")
 	
-// [ ] Maybe make a scatter plot with age as color and MPA on one axes, aa on the other? 
-
+	
+// [ ] TODO: add 95% limits? ; use same CET C6 pallette somehow?
+colorpalette Spectral, n(6) nograph 
+local color6 `"`r(p1)'"' //reverse order
+local color5 `"`r(p2)'"'
+local color4 `"`r(p3)'"'
+local color3 `"`r(p4)'"'
+local color2 `"`r(p5)'"'
+local color1 `"`r(p6)'"'
 
 twoway ///
-    (scatter ascendingaorta mpad if age_decade == 0, mcolor(blue) msymbol(O) ) || /// <30 years
-    (scatter ascendingaorta mpad if age_decade == 1, mcolor(red) msymbol(O) ) || /// 30-40 years
-    (scatter ascendingaorta mpad if age_decade == 2, mcolor(green) msymbol(O) ) || /// 40-50 years
-    (scatter ascendingaorta mpad if age_decade == 3, mcolor(orange) msymbol(O) ) || /// 50-60 years
-    (scatter ascendingaorta mpad if age_decade == 4, mcolor(purple) msymbol(O) ) || /// 60-70 years
-    (scatter ascendingaorta mpad if age_decade == 5, mcolor(black) msymbol(O) ), /// 70+ years
+    (scatter ascendingaorta mpad if age_decade == 0, mcolor("`color1'") msymbol(O)) || /// <30 years
+    (scatter ascendingaorta mpad if age_decade == 1, mcolor("`color2'") msymbol(O)) || /// 30-40 years
+    (scatter ascendingaorta mpad if age_decade == 2, mcolor("`color3'") msymbol(O)) || /// 40-50 years
+    (scatter ascendingaorta mpad if age_decade == 3, mcolor("`color4'") msymbol(O)) || /// 50-60 years
+    (scatter ascendingaorta mpad if age_decade == 4, mcolor("`color5'") msymbol(O)) || /// 60-70 years
+    (scatter ascendingaorta mpad if age_decade == 5, mcolor("`color6'") msymbol(O)), /// 70+ years
     ///
     legend(order(1 "<30 years" 2 "30-40 years" 3 "40-50 years" 4 "50-60 years" 5 "60-70 years" 6 "70+ years")) ///
     xtitle("Pulmonary Artery Diameter (mm)") ytitle("Ascending Aorta Diameter (mm)") ///
     title("Scatterplot of PA vs Ascending Aorta by Age Group") ///
     xlabel(, labsize(medlarge)) ylabel(, labsize(medlarge)) ///
     scheme(white_w3d)
+	
+/* ------------------
 
-	//todo: consider adding z-score or quantile lines to this? 
+Survival Analysis
 
+--------------------*/
+
+stset lastfollowupyear, failure(death==1)	
 
 /* ------------------
 Z-SCORE APPROACH
@@ -252,10 +271,261 @@ Overall aim:
 
 Downside? Heteroscedasticity
 
+the z‐scores represent "how far an individual's PA measurement is from the expected mean for someone of the same age and sex in this sample," - it's a valid internal standardization, but not necessarily representative of population norms
+
 ------------------ */ 
 
 
-/*
+/* PA diameter */ 
+
+/* Generate within-sample z-score */ 
+regress mpad c.age i.male
+predict mpad_hat
+egen mpad_hat_z = std(mpad_hat) 
+label variable mpad_hat_z "Age, Sex-adjusted PAd Z-score"
+
+
+/* Without Age-sex adjustment */ 
+stcox sex_norm_mpad 
+estat ic
+estat concordance
+stbrier sex_norm_mpad, bt(12.4819)
+
+preserve 
+mkspline2 rc = sex_norm_mpad, cubic nknots(4) displayknots            
+assert float(sex_norm_mpad) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc*
+estat ic
+estat concordance
+levelsof sex_norm_mpad if inrange(sex_norm_mpad, 19, 39), local(levels)
+xblc rc*, covname(sex_norm_mpad) at(`r(levels)') reference(25.1) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,19,39), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(19(3)37, labsize(large)) ///
+ xmtick(19(3)37) ///
+ ylabel(1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("Sex-Normalized Pulmonary Artery Diameter (mm)", size(large)) ///
+ title("Age-adjusted Mortality Risk by PA Diameter", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) ///
+ xline(28, lp("shortdash_dot") lc(gs10)) ///
+ text(0.85 33.75 "95% confidence interval (black dash)", size(medlarge)) ///
+ text(2.5 24 "Referenced to" "healthy population" "PAd mean (25.1 mm)", size(medlarge))
+graph export "Results and Figures/$S_DATE/HR PAd Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+restore
+
+
+/* With Age & Sex Adjustment */ 
+stcox mpad_hat_z
+estat ic
+estat concordance
+stbrier mpad_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to look into this. c-statistic much better.
+
+hist mpad_hat_z
+
+/* Notably, it's not much different than (log)linear */ 
+preserve 
+gen mpad_hat_z_rounded = round(mpad_hat_z, 0.05)
+mkspline2 rc = mpad_hat_z_rounded, cubic nknots(4) displayknots            
+assert float(mpad_hat_z_rounded) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc*
+estat ic
+estat concordance 
+levelsof mpad_hat_z_rounded if inrange(mpad_hat_z_rounded, -2, 2.65), local(levels)
+xblc rc*, covname(mpad_hat_z_rounded) at(`r(levels)') reference(0) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,-2,2.65), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(-2(0.5)2.65, labsize(large)) ///
+ xmtick(-2(0.25)2.65) ///
+ ylabel(0.125 0.25 0.5 1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("Sex-Normalized Pulmonary Artery Diameter (mm)", size(large)) ///
+ title("Age-adjusted Mortality Risk by PA Diameter", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) ///
+ xline(28, lp("shortdash_dot") lc(gs10))
+graph export "Results and Figures/$S_DATE/HR PAd Z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+restore
+
+
+
+/* Ascending Aorta */ 
+
+/* Generate within-sample z-score */ 
+regress ascendingaorta c.age i.male
+predict aa_hat
+egen aa_hat_z = std(aa_hat) 
+label variable aa_hat_z "Age, Sex-adjusted Asc Aorta Z-score"
+
+
+/* Without Age-sex adjustment */ 
+stcox ascendingaorta 
+estat ic
+estat concordance
+stbrier ascendingaorta, bt(12.4819)
+
+preserve 
+mkspline2 rc = ascendingaorta, cubic nknots(4) displayknots            
+assert float(ascendingaorta) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc*
+estat ic
+estat concordance
+levelsof ascendingaorta if inrange(ascendingaorta, 18, 50), local(levels)
+xblc rc*, covname(ascendingaorta) at(`r(levels)') reference(30) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,18,50), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(18(3)50, labsize(large)) ///
+ xmtick(18(3)50) ///
+ ylabel(0.125 0.25 0.5 1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("Asc Aorta Diameter (mm)", size(large)) ///
+ title("Mortality Risk by AA Diameter", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) 
+graph export "Results and Figures/$S_DATE/HR AA Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+restore
+
+/* With Age & Sex Adjustment */ 
+stcox aa_hat_z
+estat ic
+estat concordance
+stbrier aa_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to look into this. c-statistic much better.
+
+hist aa_hat_z
+
+/* Very (log) linear */ 
+preserve 
+gen aa_hat_z_rounded = round(aa_hat_z, 0.05)
+mkspline2 rc = aa_hat_z_rounded, cubic nknots(4) displayknots            
+assert float(aa_hat_z_rounded) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc*
+estat ic
+estat concordance
+levelsof aa_hat_z_rounded if inrange(aa_hat_z_rounded, -2, 2.5), local(levels)
+xblc rc*, covname(aa_hat_z_rounded) at(`r(levels)') reference(-0.1) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,-2,2.5), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(-2(0.5)2.5, labsize(large)) ///
+ xmtick(-2(0.25)2.5) ///
+ ylabel(0.125 0.25 0.5 1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("Asc Aorta Diameter z-score (mm)", size(large)) ///
+ title("Mortality Risk by AA Diameter Z-score", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) 
+graph export "Results and Figures/$S_DATE/HR AA z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+restore
+
+
+
+/* Ratio */ 
+
+
+/* Generate within-sample z-score */ 
+regress mpaaa c.age i.male
+predict mpaaa_hat
+egen mpaaa_hat_z = std(mpaaa_hat)
+label variable mpaaa_hat_z "Age, Sex-adjusted PA:AA Z-score"
+
+
+/* Without Age-sex adjustment */ 
+stcox mpaaa 
+estat ic
+estat concordance
+stbrier mpaaa, bt(12.4819)
+
+
+preserve 
+gen mpaaa_rounded = round(mpaaa, 0.01)
+mkspline2 rc = mpaaa_rounded, cubic nknots(4) displayknots            
+assert float(mpaaa_rounded) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc*
+estat ic
+estat concordance
+levelsof mpaaa_rounded if inrange(mpaaa_rounded, 0.47, 1.4), local(levels)
+xblc rc*, covname(mpaaa_rounded) at(`r(levels)') reference(0.77) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,0.47,1.4), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(0.5(.1)1.4, labsize(large)) ///
+ xmtick(0.5(0.05)1.4) ///
+ ylabel(1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("PA:AA", size(large)) ///
+ title("PA:AA Mortality Risk", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) ///
+ xline(28, lp("shortdash_dot") lc(gs10))
+graph export "Results and Figures/$S_DATE/HR PAAA Splines - Whole Cohort.png", as(png) name("Graph") replace
+restore
+
+/* With Age-sex adjustment */ 
+stcox mpaaa_hat_z
+estat ic
+estat concordance
+stbrier mpaaa_hat_z, bt(12.4819)
+
+preserve 
+gen mpaaa_hat_z_rounded = round(mpaaa_hat_z, 0.02)
+mkspline2 rc = mpaaa_hat_z_rounded, cubic nknots(4) displayknots            
+assert float(mpaaa_hat_z_rounded) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc*
+estat ic
+estat concordance
+levelsof mpaaa_hat_z_rounded if inrange(mpaaa_hat_z_rounded, -2.5, 2), local(levels)
+xblc rc*, covname(mpaaa_hat_z_rounded) at(`r(levels)') reference(-1) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,-2.51,2.01), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(-2.5(.5)2, labsize(large)) ///
+ xmtick(-2.5(0.25)2) ///
+ ylabel(1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("PA:AA z-score", size(large)) ///
+ title("PA:AA z-score Mortality Risk", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) ///
+ xline(28, lp("shortdash_dot") lc(gs10))
+graph export "Results and Figures/$S_DATE/HR PAAA z score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+restore
+
+
+//TODO: bivariate splines predicted heatmap like in the HCO3 paper? z-scored and not. 
+//splines
+
+stcox c.mpad_hat_z c.aa_hat_z
+estat ic
+estat concordance
+stbrier mpaaa_hat_z, bt(12.4819)
+
+
+stcox c.mpad_hat_z##c.aa_hat_z
+estat ic
+estat concordance
+stbrier mpaaa_hat_z, bt(12.4819)
+
+
+
+
+
+/* To do a version that does variable std deviation: 
 * Regress PA on age (linearly) and sex
 regress PA c.age i.sex
 
