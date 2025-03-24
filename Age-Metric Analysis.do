@@ -356,6 +356,59 @@ twoway ///
     scheme(white_w3d)
 
 
+	
+/* ----- Exploration of the thresholds used by them ------- */ 	
+	
+// Visualize the tertiles that they proposed
+
+//Tertile 1: up to 32mm 
+//Tertile 2: 33-38mm
+//Tertile 3: 39< 
+
+/* -----
+Extract Colors from Spectral Palette
+-----*/ 
+colorpalette Spectral, n(6) nograph  
+local color6 `"`r(p1)'"' // Reverse order
+local color5 `"`r(p2)'"'
+local color4 `"`r(p3)'"'
+local color3 `"`r(p4)'"'
+local color2 `"`r(p5)'"'
+local color1 `"`r(p6)'"'
+
+/* Generate threshold variables */
+gen cao_thresh1 = 32.5
+gen cao_thresh2 = 38.5
+
+/* Scatter Plot with CAO MPAD Tertile Thresholds */
+twoway ///
+    (scatter mpad age if age_decade == 0 & male == 0, mcolor("`color1'") msymbol(O)) ||  ///
+    (scatter mpad age if age_decade == 0 & male == 1, mcolor("`color1'") msymbol(S)) ||  ///
+    (scatter mpad age if age_decade == 1 & male == 0, mcolor("`color2'") msymbol(O)) ||  ///
+    (scatter mpad age if age_decade == 1 & male == 1, mcolor("`color2'") msymbol(S)) ||  ///
+    (scatter mpad age if age_decade == 2 & male == 0, mcolor("`color3'") msymbol(O)) ||  ///
+    (scatter mpad age if age_decade == 2 & male == 1, mcolor("`color3'") msymbol(S)) ||  ///
+    (scatter mpad age if age_decade == 3 & male == 0, mcolor("`color4'") msymbol(O)) ||  ///
+    (scatter mpad age if age_decade == 3 & male == 1, mcolor("`color4'") msymbol(S)) ||  ///
+    (scatter mpad age if age_decade == 4 & male == 0, mcolor("`color5'") msymbol(O)) ||  ///
+    (scatter mpad age if age_decade == 4 & male == 1, mcolor("`color5'") msymbol(S)) ||  ///
+    (scatter mpad age if age_decade == 5 & male == 0, mcolor("`color6'") msymbol(O)) ||  ///
+    (scatter mpad age if age_decade == 5 & male == 1, mcolor("`color6'") msymbol(S)) ||  ///
+    (line cao_thresh1 age, lcolor(black) lpattern(solid) lwidth(medthick)) ||  ///
+    (line cao_thresh2 age, lcolor(gs8) lpattern(dash) lwidth(medthick)),  ///
+    legend(order(1 "<30 Female" 2 "<30 Male" 3 "30-40 Female" 4 "30-40 Male"  ///
+                 5 "40-50 Female" 6 "40-50 Male" 7 "50-60 Female" 8 "50-60 Male"  ///
+                 9 "60-70 Female" 10 "60-70 Male" 11 "70+ Female" 12 "70+ Male"  ///
+                 13 "Cao Tertile 1-2 Threshold (32.5)" 14 "Cao Tertile 2-3 Threshold (38.5)"))  ///
+    xtitle("Age (years)") ytitle("Pulmonary Artery Diameter (mm)")  ///
+    title("Cao MPAD Tertile Thresholds by Age (Both Sexes)")  ///
+    xlabel(, labsize(medlarge)) ylabel(, labsize(medlarge))  ///
+    scheme(white_w3d)
+	
+	
+	
+	
+
 /* -----
 Sex-Stratified Quantile Regression Scatter Plots
 -----*/ 
@@ -828,6 +881,63 @@ stcurve, surv at(mpad_tertile=1 male=0.3737 age=52) /// at mean values
           legend(order(1 "MPA Tertile 1" 2 "MPA Tertile 2" 3 "MPA Tertile 3") ///
                  position(6) ring(0) rows(1) size(medsmall)) 
 
+				 
+				 
+				 
+				 
+				 
+				 
+/* Using the Cao Tertiles */ 
+
+
+* Generate ordinal tertile variable in a single step
+recode mpad (min/32.49=1) (32.5/38.49=2) (38.5/max=3), gen(cao_mpad_tertile)
+label define cao_mpad_tertile_lbl 1 "Cao Tertile 1" 2 "Cao Tertile 2" 3 "Cao Tertile 3"
+label values cao_mpad_tertile cao_mpad_tertile_lbl
+label variable cao_mpad_tertile "MPA Diameter Tertile (from Cao et al.)"
+
+* Verify the distribution
+tab cao_mpad_tertile
+bysort male: tab cao_mpad_tertile age_decade, col
+				 
+sts test cao_mpad_tertile, logrank 
+sts graph, by(cao_mpad_tertile) tmax(10) ci surv ///
+ plotopts(lwidth(thick)) ///
+ risktable(0(1)10, order(1 "MPA Tertile 1 (Cao)" 2 "MPA Tertile 2 (Cao)" 3 "MPA Tertile 3 (Cao)") title("Number Eligible", size(medium)) size(medsmall)) ///
+ xlabel(0(1)10, labsize(medlarge)) ///
+ ylabel(,labsize(medlarge)) ///
+ xtitle("Year of Followup", size(medlarge)) ///
+ ytitle("Survival", size(medlarge)) ///
+ legend(order(2 "MPA Tertile 1 (Cao)" 4 "MPA Tertile 2 (Cao)" 6 "MPA Tertile 3 (Cao)") position(6) ring(0) rows(1) size(medsmall)) ///
+ title("Survival by Main PA Diameter Tertile from Cao et al", size(large))
+
+stcox i.cao_mpad_tertile
+estat concordance
+stbrier i.cao_mpad_tertile, bt(12.4819)
+
+
+/* Add age and sex */ 
+
+stcox i.cao_mpad_tertile c.age i.male
+estat concordance
+stbrier i.cao_mpad_tertile, bt(12.4819)
+
+
+stcox i.cao_mpad_tertile c.age male
+stcurve, surv at(cao_mpad_tertile=1 male=0.3737 age=52) /// at mean values
+          at(cao_mpad_tertile=2 male=0.3737 age=52) ///
+          at(cao_mpad_tertile=3 male=0.3737 age=52) ///
+          range(0 10) ///
+          xlabel(0(1)10, labsize(medlarge)) ///
+          ylabel(0(.1)1,labsize(medlarge)) ///
+          xtitle("Year of Followup", size(medlarge)) ///
+          ytitle("Predicted Survival", size(medlarge)) ///
+          title("Predicted Survival by PA Diameter Tertile, Adjusted for Age & Sex", size(large)) ///
+          legend(order(1 "MPA Tertile 1 (Cao)" 2 "MPA Tertile 2 (Cao)" 3 "MPA Tertile 3 (Cao)") ///
+                 position(6) ring(0) rows(1) size(medsmall)) 				 
+				 
+				 
+	
 					
 					
 					
@@ -1082,6 +1192,64 @@ stbrier i.mpad_tertile, bt(12.4819)
 
 
 
+
+/* 95th percentile version */ 
+
+//overall 95th percentile version? 
+
+
+/* -----
+Step 1: Compute 95th Percentile Using Quantile Regression
+-----*/
+* Run Quantile Regression Separately for Males
+qreg mpad c.age if male == 1, quantile(0.95)
+predict mpad_q_95_male if male == 1, xb
+
+* Run Quantile Regression Separately for Females
+qreg mpad c.age if male == 0, quantile(0.95)
+predict mpad_q_95_female if male == 0, xb
+
+/* -----
+Step 2: Categorize Individuals by age-sex 95th percentile
+-----*/
+* Create an empty variable for tertile classification
+gen mpad_pred_95tile = .
+
+* Assign individuals into tertiles based on their predicted quantile cutoffs
+replace mpad_pred_95tile = 0 if male == 1 & mpad < mpad_q_95_male 
+replace mpad_pred_95tile = 1 if male == 1 & mpad >= mpad_q_95_male 
+
+replace mpad_pred_95tile = 0 if male == 0 & mpad < mpad_q_95_female 
+replace mpad_pred_95tile = 1 if male == 0 & mpad >= mpad_q_95_female 
+
+/* -----
+Step 3: Label the Categories
+-----*/
+
+label define mpad_pred_95tile_lbl 0 "Below age, sex 95 percentile" 1 "Above age, sex 95 percentile"
+label values mpad_pred_95tile mpad_pred_95tile_lbl
+
+* Verify the tertile distribution
+tab mpad_pred_95tile age_decade 
+
+
+
+
+
+
+kappaetc mpad_pred_tertile mpad_tertile
+
+
+tab3way mpad_pred_tertile mpad_tertile age_decade 
+
+
+
+
+
+
+
+
+
 /* ---------
 MPA:AA 
 ----------*/ 
@@ -1219,6 +1387,10 @@ tab mpaaa_pred_tertile mpaaa_tertile
 kappaetc mpaaa_pred_tertile mpaaa_tertile
 
 tab3way mpaaa_pred_tertile mpaaa_tertile age_decade
+	
+	
+/* Create comparison tertile - not age adjusted */
+	
 	
 	
 
