@@ -1393,6 +1393,12 @@ tab3way mpaaa_pred_tertile mpaaa_tertile age_decade
 	
 	
 	
+	
+
+	
+
+
+	
 
 	
 	
@@ -1434,7 +1440,7 @@ stbrier i.mpaaa_tertile, bt(12.4819)
 /* -----
 Cox Proportional Hazards Model by PA:AA Predicted Tertile with Age and Sex Adjustment
 -----*/ 
-stcox i.mpaaa_pred_tertile c.age i.male
+stcox i.mpaaa_pred_tertile c.age i.male 
 estat concordance
 
 /* -----
@@ -1447,27 +1453,133 @@ stbrier i.mpaaa_tertile, bt(12.4819)
 	
 	
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	//Old analysis 
+/* Create Bivariate Prediction Model with PAd and AA (and age + sex) */ 
+
+// Challenge - we just have BMI (and obesity) - but not raw data. 
+
+/* Without Splines, but with interactions */ 
+
+preserve
+
+stcox c.mpad##c.ascendingaorta
+estat ic
+estat concordance
+stbrier mpad, bt(12.4819)
+
+stcox c.mpad_hat_z##c.aa_hat_z
+estat ic
+estat concordance
+stbrier mpaaa_hat_z, bt(12.4819)
+
+
+restore
+
+
+//TODO: mpad z-score or quantile?
+preserve
+
+stcox c.mpad##c.ascendingaorta  //hat?
+
+restore
 
 
 
 
 
+/* ------------- 
+Dual Splines of Risk with PAd and Ao 
+
+Take-away from this analysis: it doesn't seem like there's any particular non-linearities that argue against our categorization of potassium 
+Perhaps potassium is most important in low ranges. 
+-------------*/ 
+
+preserve
+//modeled with two restricted cubic splines and an interaction term
+
+//keep if is_inp == 1 // to test.. most of acute decomp = in emer etc. - esp for ambulatory need to drop the number of knots though
+gen mpad_rounded = round(mpad, 0.1)
+mkspline2 mpad_rc = mpad_rounded, cubic nknots(3) displayknots 
+assert float(mpad_rounded) == float(mpad_rc1)
+
+gen aa_rounded = round(ascendingaorta, 0.1)
+mkspline2 aa_rc = aa_rounded, cubic nknots(3) displayknots
+assert float(aa_rounded) == float(aa_rc1) // VERIFY FIRST SPLINE VARIABLE IS THE ORIGINAL VARIABLE
+
+stcox c.(mpad_rc*)##c.(aa_rc*) // MODEL WITH FULL SPLINES and interactions
+
+clear
+set obs 0
+
+* Step 1: Expand grid structure (but generate vars outside loop!)
+set obs 1
+gen mpad = .
+gen ascendingaorta = .
+
+* Step 2: Fill in values for each mpad/aa combination
+forvalues m = 20(1)35 {
+    forvalues a = 25(1)40 {
+        set obs `=_N + 1'
+        replace mpad = `m' in `=_N'
+        replace ascendingaorta = `a' in `=_N'
+    }
+}
+
+* Round for spline compatibility
+gen mpad_rounded = round(mpad, 0.1)
+gen aa_rounded = round(ascendingaorta, 0.1)
+
+* Create spline variables for the grid
+mkspline2 mpad_rc = mpad_rounded, cubic nknots(3)
+mkspline2 aa_rc = aa_rounded, cubic nknots(3)
+
+* Predict log-hazard
+predict xb_logHR, xb
+
+* Add reference row to dataset
+set obs `=_N + 1'
+replace mpad = 25.1 in `=_N'
+replace ascendingaorta = 30.1 in `=_N'
+replace mpad_rounded = 25.1 in `=_N'
+replace aa_rounded = 30.1 in `=_N'
+
+* Recreate splines with reference row included
+mkspline2 mpad_rc = mpad_rounded, cubic nknots(3)
+mkspline2 aa_rc = aa_rounded, cubic nknots(3)
+
+* Predict log-HR for reference row
+predict xb_ref, xb
+scalar ref_logHR = xb_ref[_N]
+
+* Drop reference row
+drop in `=_N'
+
+* Normalize hazard ratios to reference
+gen normalized_HR = exp(xb_logHR - ref_logHR)
+
+heatplot normalized_HR mpad ascendingaorta, ///
+    color(Blues, reverse) ///
+    xtitle("Main PA Diameter (mm)") ///
+    ytitle("Ascending Aorta Diameter (mm)") ///
+    title("Predicted HR by MPAD and Ascending Aorta") ///
+    legtitle("HR (vs. 25.1 / 30.1)") ///
+    xlabel(20(5)35, labsize(medsmall)) ///
+    ylabel(25(5)40, labsize(medsmall)) ///
+    scheme(white_w3d)
+
+restore
+
+
+heatplot pa_aa_spline_model_pr mpad ascendingaorta, cut(0(0.05)1) aspectratio(0.7) xlabel( 2.0(0.5)6.5,angle(vertical) labsize(3)) ylabel(15(5)45 ,labsize(3)) ybwidth(1) xbwidth(0.1) ytitle("AA", size(4)) xtitle("PA", size(4)) color(YlOrRd) ramp(right format(%3.2f) space(18) subtitle("Predicted" "HR of" "Death", size(small) justification(center)) label(0(0.1)1, labsize(3)) ) p(lcolor(black%10) lwidth(*0.15)) xsize(3.5) ysize(3.5) clip
+graph export "Results and Figures/$S_DATE/Predicted Hypercap by HCO3 and K w splines.png", as(png) name("Graph") replace
+
+//TODO: separate spines for each encounter type?
+restore
+
+	
+	
+	
+	
+	
 
 /*PA Size*/ 
 
@@ -1516,7 +1628,7 @@ xblc rc*, covname(sex_norm_mpad) at(`r(levels)') reference(25.1) eform generate(
 * Store predicted hazard ratio as new variable
 gen mpad_hazard_pr = hazard
 
-
+restore 
 
 
 /* AA Size */ 
@@ -1606,9 +1718,10 @@ the z‐scores represent "how far an individual's PA measurement is from the exp
 
 /* Generate within-sample z-score */ 
 regress mpad c.age i.male
-predict mpad_hat
-egen mpad_hat_z = std(mpad_hat) 
-label variable mpad_hat_z "Age, Sex-adjusted PAd Z-score"
+predict double mpad_hat
+gen double mpad_resid = mpad - mpad_hat
+egen double mpad_hat_z = std(mpad_resid)
+label variable mpad_hat_z "Age- & sex-adjusted PAd z-score"
 
 stcox mpad_hat_z
 estat ic
@@ -1617,7 +1730,7 @@ stbrier mpad_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to 
 
 hist mpad_hat_z
 
-/* Notably, it's not much different than (log)linear */ 
+/* U shaped again (but not at 0,0) */ 
 preserve 
 gen mpad_hat_z_rounded = round(mpad_hat_z, 0.05)
 mkspline2 rc = mpad_hat_z_rounded, cubic nknots(4) displayknots            
@@ -1649,11 +1762,17 @@ restore
 /* Ascending Aorta */ 
 
 /* Generate within-sample z-score */ 
-regress ascendingaorta c.age i.male
-predict aa_hat
-egen aa_hat_z = std(aa_hat) 
-label variable aa_hat_z "Age, Sex-adjusted Asc Aorta Z-score"
 
+* 1. Regress Ascending Aorta on Age and Sex
+regress ascendingaorta c.age i.male
+* 2. Predict the fitted/expected value
+predict double aa_hat
+* 3. Compute the residual = observed - predicted
+gen double aa_resid = ascendingaorta - aa_hat
+* 4. Standardize the residual to get the z-score
+egen double aa_hat_z = std(aa_resid)
+* 5. Label it meaningfully
+label variable aa_hat_z "Age- & Sex-adjusted Asc. Aorta Z-score"
 
 /* With Age & Sex Adjustment */ 
 stcox aa_hat_z
@@ -1663,7 +1782,7 @@ stbrier aa_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to lo
 
 hist aa_hat_z
 
-/* Very (log) linear */ 
+/* U-shape */ 
 preserve 
 gen aa_hat_z_rounded = round(aa_hat_z, 0.05)
 mkspline2 rc = aa_hat_z_rounded, cubic nknots(4) displayknots            
@@ -1693,13 +1812,14 @@ restore
 
 /* Ratio */ 
 
-
 /* Generate within-sample z-score */ 
 regress mpaaa c.age i.male
-predict mpaaa_hat
-egen mpaaa_hat_z = std(mpaaa_hat)
-label variable mpaaa_hat_z "Age, Sex-adjusted PA:AA Z-score"
+predict double mpaaa_hat
+gen double mpaaa_resid = mpaaa - mpaaa_hat
+egen double mpaaa_hat_z = std(mpaaa_resid)
+label var mpaaa_hat_z "Age- & Sex-adjusted PA:AA Z-score"
 
+hist mpaaa_hat_z
 
 /* With Age-sex adjustment */ 
 stcox mpaaa_hat_z
@@ -1734,19 +1854,77 @@ graph export "Results and Figures/$S_DATE/HR PAAA z score Splines - Whole Cohort
 restore
 
 
-//TODO: bivariate splines predicted heatmap like in the HCO3 paper? z-scored and not. 
-//splines
 
-stcox c.mpad_hat_z c.aa_hat_z
+
+
+
+// [ ] TODO: compare z-score to non-z-score in terms of predictiveness. 
+
+
+
+
+
+
+
+
+//Note: may need to move z-score generation up to here. 
+
+/* ------------- 
+Dual Splines of Risk with Bicarbonate and potassium 
+Take-away from this analysis: it doesn't seem like there's any particular non-linearities that argue against our categorization of potassium 
+Perhaps potassium is most important in low ranges. 
+-------------*/ 
+
+preserve
+//modeled with two restricted cubic splines and an interaction term
+
+//keep if is_inp == 1 // to test.. most of acute decomp = in emer etc. - esp for ambulatory need to drop the number of knots though
+gen mpad_z_rounded = round(mpad_hat_z, 0.1)
+mkspline2 mpad_z_rc = mpad_z_rounded, cubic nknots(3) displayknots 
+assert float(mpad_z_rounded) == float(mpad_z_rc1)
+
+gen aa_z_rounded = round(aa_hat_z, 0.1)
+mkspline2 aa_z_rc = aa_z_rounded, cubic nknots(3) displayknots
+assert float(aa_z_rounded) == float(aa_z_rc1) // VERIFY FIRST SPLINE VARIABLE IS THE ORIGINAL VARIABLE
+
+stcox c.(mpad_z_rc*) c.(aa_z_rc*)
+
+predict mpad_aa_spline_z_hr, hr 
+summ mpad_aa_spline_z_hr 
 estat ic
 estat concordance
-stbrier mpaaa_hat_z, bt(12.4819)
+stbrier c.(mpad_z_rc*) c.(aa_z_rc*), bt(12.4819)
+	
+heatplot mpad_aa_spline_z_hr mpad_hat_z aa_hat_z, ///
+    color(Blues, reverse) ///
+    xtitle("Main PA Diameter (z-score)") ///
+    ytitle("Ascending Aorta Diameter (z-score)") ///
+    title("Predicted HR by MPAD and Ascending Aorta") ///
+    xlabel(-2(1)2, labsize(medsmall)) ///
+    ylabel(-2(1)2, labsize(medsmall)) ///
+    scheme(white_w3d)
+	
+// Visualize splines: 
+//[ ] todo: complete this
+levelsof mpaaa_rounded if inrange(mpaaa_rounded, 0.47, 1.4), local(levels)
+xblc rc*, covname(mpaaa_rounded) at(`r(levels)') reference(0.77) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,0.47,1.4), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(0.5(.1)1.4, labsize(large)) ///
+ xmtick(0.5(0.05)1.4) ///
+ ylabel(1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("PA:AA", size(large)) ///
+ title("PA:AA Mortality Risk", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) ///
+ xline(28, lp("shortdash_dot") lc(gs10))
+graph export "Results and Figures/$S_DATE/HR PAAA Splines - Whole Cohort.png", as(png) name("Graph") replace
+	
 
-
-stcox c.mpad_hat_z##c.aa_hat_z
-estat ic
-estat concordance
-stbrier mpaaa_hat_z, bt(12.4819)
+restore
 
 
 
