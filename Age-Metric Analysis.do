@@ -68,7 +68,6 @@ label values pa_confusion_matrix pa_confusion_lab
 tab enlargedpa pa_confusion_matrix, col //sanity checks
 tab enlargedratio pa_confusion_matrix 
 
-
 //label comorbdities
 label variable pulmdisease "Pulmonary Disease"
 label variable chf "Congestive Heart Failure"
@@ -79,16 +78,6 @@ label variable hypertension "Hypertension"
 label variable pulmonarycircdisorder "Pulm Circ. Disorder"
 label variable peripheralvascdisorders "Periph Vasc. Disease"
 label variable renalfailure "Kidney Disease"
-
-// [ ] remove? 
-gen known_assoc_comorb = 0
-replace known_assoc_comorb = 1 if (pulmdisease == 1 | pulmonarycircdisorders == 1 | chf == 1) 
-tab chf known_assoc_comorb, missing //sanity checks
-tab pulmdisease known_assoc_comorb, missing
-tab pulmonarycircdisorders known_assoc_comorb, missing
-label variable known_assoc_comorb "Known Comorbidity w PA->Mortality Association?"
-label define known_assoc_comorb_lab 0 "No Pulm Dz/CHF/Pulm Vasc Dz" 1 "Any of Pulm Dz/CHF/Pulm Vasc Dz"
-label values known_assoc_comorb known_assoc_comorb_lab
 
 // Split diabetes into complicated vs not. 
 tab diabetes3
@@ -115,13 +104,17 @@ label variable time_of_death "Time of Death"
 gen time_of_censoring = lastfollowupyear if death != 1
 label variable time_of_censoring "Time of longest follow-up alive"
 
-
 //Categorizations of continuous variables; for graphs
- 
 recode age min/30=0 30/40=1 40/50=2 50/60=3 60/70=4 70/max=5, gen(age_decade)
 label define age_dec_lab 0 "<30 years" 1 "30-40 years" 2 "40-50 years" 3 "50-60 years" 4 "60-70 years" 5 "70+ years"
 label variable age_decade "Age (by decade)"
 label values age_decade age_dec_lab 
+
+
+
+/*. 
+Should we not use these? 
+*/ 
 
 gen sex_norm_mpad = .
 replace sex_norm_mpad = mpad + 1 if male == 0
@@ -155,6 +148,15 @@ use cleaned_noempi
 
 /* Analysis */ 
 
+
+/* ---------
+
+goal 1: describe the population
+
+---------- */ 
+
+
+
 /* 
 Table 1
 */ 
@@ -186,6 +188,27 @@ saving("Results and Figures/$S_DATE/Table 1 PA enlargement by Age.xlsx", replace
 
 
 /* Raw Data */ 
+
+//Draw PA:AA quintile lines
+_pctile mpaaa, percentiles(20 40 60 80)
+local p20 = r(r1)
+local p40 = r(r2)
+local p60 = r(r3)
+local p80 = r(r4)
+* Define plotting range (match axes)
+range aa_vals 17 48 200
+
+_pctile mpaaa, percentiles(20 40 60 80) //text labels
+local q20 = string(r(r1), "%5.2f")
+local q40 = string(r(r2), "%5.2f")
+local q60 = string(r(r3), "%5.2f")
+local q80 = string(r(r4), "%5.2f")
+
+gen paaa_line_20 = `p20' * aa_vals
+gen paaa_line_40 = `p40' * aa_vals
+gen paaa_line_60 = `p60' * aa_vals
+gen paaa_line_80 = `p80' * aa_vals
+
 colorpalette Spectral, n(6) nograph  // [ ] TODO: use same CET C6 pallette somehow?
 local color6 `"`r(p1)'"' // Reverse order
 local color5 `"`r(p2)'"'
@@ -195,31 +218,43 @@ local color2 `"`r(p5)'"'
 local color1 `"`r(p6)'"'
 
 twoway ///
-    (scatter ascendingaorta mpad if age_decade == 0 & male == 0, mcolor("`color1'") msymbol(O)) || /// <30 years, Female
-    (scatter ascendingaorta mpad if age_decade == 0 & male == 1, mcolor("`color1'") msymbol(S)) || /// <30 years, Male
-    (scatter ascendingaorta mpad if age_decade == 1 & male == 0, mcolor("`color2'") msymbol(O)) || /// 30-40 years, Female
-    (scatter ascendingaorta mpad if age_decade == 1 & male == 1, mcolor("`color2'") msymbol(S)) || /// 30-40 years, Male
-    (scatter ascendingaorta mpad if age_decade == 2 & male == 0, mcolor("`color3'") msymbol(O)) || /// 40-50 years, Female
-    (scatter ascendingaorta mpad if age_decade == 2 & male == 1, mcolor("`color3'") msymbol(S)) || /// 40-50 years, Male
-    (scatter ascendingaorta mpad if age_decade == 3 & male == 0, mcolor("`color4'") msymbol(O)) || /// 50-60 years, Female
-    (scatter ascendingaorta mpad if age_decade == 3 & male == 1, mcolor("`color4'") msymbol(S)) || /// 50-60 years, Male
-    (scatter ascendingaorta mpad if age_decade == 4 & male == 0, mcolor("`color5'") msymbol(O)) || /// 60-70 years, Female
-    (scatter ascendingaorta mpad if age_decade == 4 & male == 1, mcolor("`color5'") msymbol(S)) || /// 60-70 years, Male
-    (scatter ascendingaorta mpad if age_decade == 5 & male == 0, mcolor("`color6'") msymbol(O)) || /// 70+ years, Female
-    (scatter ascendingaorta mpad if age_decade == 5 & male == 1, mcolor("`color6'") msymbol(S)), /// 70+ years, Male
-    ///
+    (scatter mpad ascendingaorta if age_decade == 0 & male == 0, mcolor("`color1'") msymbol(O)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 0 & male == 1, mcolor("`color1'") msymbol(S)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 1 & male == 0, mcolor("`color2'") msymbol(O)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 1 & male == 1, mcolor("`color2'") msymbol(S)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 2 & male == 0, mcolor("`color3'") msymbol(O)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 2 & male == 1, mcolor("`color3'") msymbol(S)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 3 & male == 0, mcolor("`color4'") msymbol(O)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 3 & male == 1, mcolor("`color4'") msymbol(S)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 4 & male == 0, mcolor("`color5'") msymbol(O)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 4 & male == 1, mcolor("`color5'") msymbol(S)) || /// 
+    (scatter mpad ascendingaorta if age_decade == 5 & male == 0, mcolor("`color6'") msymbol(O)) || ///
+    (scatter mpad ascendingaorta if age_decade == 5 & male == 1, mcolor("`color6'") msymbol(S)) || ///
+    (line paaa_line_20 aa_vals, lcolor(gs10) lpattern(dash)) || ///
+    (line paaa_line_40 aa_vals, lcolor(gs10) lpattern(dash)) || ///
+    (line paaa_line_60 aa_vals, lcolor(gs10) lpattern(dash)) || ///
+    (line paaa_line_80 aa_vals, lcolor(gs10) lpattern(dash)), ///
+    xtitle("Ascending Aorta Diameter (mm)") ///
+    ytitle("Pulmonary Artery Diameter (mm)") ///
+    xlabel(15(5)50, labsize(medlarge)) ///
+    ylabel(15(5)45, labsize(medlarge)) ///
     legend(order(1 "<30 Female" 2 "<30 Male" 3 "30-40 Female" 4 "30-40 Male" ///
                  5 "40-50 Female" 6 "40-50 Male" 7 "50-60 Female" 8 "50-60 Male" ///
-                 9 "60-70 Female" 10 "60-70 Male" 11 "70+ Female" 12 "70+ Male")) ///
-    xtitle("Pulmonary Artery Diameter (mm)") ytitle("Ascending Aorta Diameter (mm)") ///
-    title("Scatterplot of PA vs Ascending Aorta by Age Group & Sex") ///
-    xlabel(, labsize(medlarge)) ylabel(, labsize(medlarge)) ///
+                 9 "60-70 Female" 10 "60-70 Male" 11 "70+ Female" 12 "70+ Male") ///
+           position(3) rows(12) size(small)) ///
+	text(42 22 ///
+	"PA:AA Quintile Cutoffs:" ///
+	"Q1 ≤ `q20'" ///
+	"Q2 ≤ `q40'" ///
+	"Q3 ≤ `q60'" ///
+	"Q4 ≤ `q80'" ///
+	"Q5 >  `q80'", size(medsmall)) ///
     scheme(white_w3d)
-	
 
 
-
-//ridgelines plots to visualize overall change by age. 
+/* ---------------
+ridgelines plots to visualize overall change by age. 
+-----------------*/ 
 
 /* PAd */ 
 ridgeline mpad, by(age_decade) yline ylw(0.2) overlap(1.7) ylc(blue) ylp(dot) ////
@@ -244,7 +279,7 @@ ridgeline mpad if male == 1, by(age_decade) yline ylw(0.2) overlap(1.7) ///
 
 graph combine ridgeline_female.gph ridgeline_male.gph, ///
     title("Ridgeline Plot of PA Diameter by Age Group & Sex")
-	
+
 
 /* Asc Aorta */ 
 ridgeline ascendingaorta, by(age_decade) yline ylw(0.2) overlap(1.7) ylc(blue) ylp(dot) ////
@@ -296,21 +331,77 @@ graph combine ridgeline_mpaaa_female.gph ridgeline_mpaaa_male.gph, ///
     title("Ridgeline Plot of PA:AA Ratio by Age & Sex")
 	
 
+/* ---------
 
+goal 2: Does PA size increase with age? Does PA size increase with age after accounting for known comorbidities? (At 50, 90, 95th percentiles)
+
+---------- */ 
 	
 /* -------------------
 Quantile Regression 
 -------------------*/ 
 	
 /* PA size and age */ 
-
 /* All individuals */ 
-/* First - shared quantiles */ 
-
 /* Run Bootstrap Quantile Regressions for the Full Population */
+
+//Only age
 bsqreg mpad c.age, quantile(50) reps(500) // 50th Percentile
 bsqreg mpad c.age, quantile(90) reps(500) // 90th Percentile
 bsqreg mpad c.age, quantile(95) reps(500) // 95th Percentile
+
+//Age and sex sex does not confound relationship much.
+bsqreg mpad c.age i.male, quantile(50) reps(500) // 50th Percentile
+bsqreg mpad c.age i.male, quantile(90) reps(500) // 90th Percentile
+bsqreg mpad c.age i.male, quantile(95) reps(500) // 95th Percentile
+
+//Age, sex, obesity: obesity adds a lot (and makes the percentiles more extreme)
+bsqreg mpad c.age i.male i.obesity_calc, quantile(50) reps(500) // 50th Percentile
+bsqreg mpad c.age i.male i.obesity_calc, quantile(90) reps(500) // 90th Percentile
+bsqreg mpad c.age i.male i.obesity_calc, quantile(95) reps(500) // 95th Percentile
+
+//Age, sex, and comorbidities (from the original papers): obesity adds a lot (and makes the percentiles more extreme)
+/* Not much change */ 
+bsqreg mpad c.age i.male i.obesity_calc i.hypertension i.diabetes3 i.chf i.pulmdisease i.pulmonarycircdisorders i.peripheralvascdisorders i.renalfailure, quantile(50) reps(500) // 50th Percentile
+bsqreg mpad c.age i.male i.obesity_calc i.hypertension i.diabetes3 i.chf i.pulmdisease i.pulmonarycircdisorders i.peripheralvascdisorders i.renalfailure, quantile(90) reps(500) // 90th Percentile
+bsqreg mpad c.age i.male i.obesity_calc i.hypertension i.diabetes3 i.chf i.pulmdisease i.pulmonarycircdisorders i.peripheralvascdisorders i.renalfailure, quantile(95) reps(500) // 95th Percentile
+
+
+
+/* Aorta size and age */ 
+//Only age
+bsqreg ascendingaorta c.age, quantile(50) reps(500) // 50th Percentile
+bsqreg ascendingaorta c.age, quantile(90) reps(500) // 90th Percentile
+bsqreg ascendingaorta c.age, quantile(95) reps(500) // 95th Percentile
+
+//Age and sex - sex does not confound relationship much.
+bsqreg ascendingaorta c.age i.male, quantile(50) reps(500) // 50th Percentile
+bsqreg ascendingaorta c.age i.male, quantile(90) reps(500) // 90th Percentile
+bsqreg ascendingaorta c.age i.male, quantile(95) reps(500) // 95th Percentile
+
+//Age, sex, obesity: obesity adds a lot (and makes the percentiles more extreme)
+bsqreg ascendingaorta c.age i.male i.obesity_calc, quantile(50) reps(500) // 50th Percentile
+bsqreg ascendingaorta c.age i.male i.obesity_calc, quantile(90) reps(500) // 90th Percentile
+bsqreg ascendingaorta c.age i.male i.obesity_calc, quantile(95) reps(500) // 95th Percentile
+
+//Age, sex, and comorbidities (from the original papers): obesity adds a lot (and makes the percentiles more extreme)
+/* Not much change - interestingly. HTN not a strong predictor - HF is main one. */ 
+bsqreg ascendingaorta c.age i.male i.obesity_calc i.hypertension i.diabetes3 i.chf i.pulmdisease i.pulmonarycircdisorders i.peripheralvascdisorders i.renalfailure, quantile(50) reps(500) // 50th Percentile
+bsqreg ascendingaorta c.age i.male i.obesity_calc i.hypertension i.diabetes3 i.chf i.pulmdisease i.pulmonarycircdisorders i.peripheralvascdisorders i.renalfailure, quantile(90) reps(500) // 90th Percentile
+bsqreg ascendingaorta c.age i.male i.obesity_calc i.hypertension i.diabetes3 i.chf i.pulmdisease i.pulmonarycircdisorders i.peripheralvascdisorders i.renalfailure, quantile(95) reps(500) // 95th Percentile
+
+/* Summary - the comorbidities do not explain the changes in either PA or AA with age. Sex, Obesity also do not (and increase the size relationship, probably due to an inverse relationship with size and age) */ 
+
+
+
+
+
+
+// [ ] TODO: do I need to keep this? 
+
+
+/* TODO: MOVE ALL THESE TO BOTTOM 
+
 
 /* Extract Colors from Spectral Palette */
 colorpalette Spectral, n(6) nograph  
@@ -664,8 +755,19 @@ graph combine male_qreg_plot.gph female_qreg_plot.gph, ///
     graphregion(margin(2 2 2 2)) ///
     xsize(9) ysize(5)
 
-
+*/ 
 	
+	
+	
+	
+	
+	
+
+/* ---------
+
+goal 3: Does the PA increase less slowly than the AA? (Ie. The ratio drops with time)? 
+
+---------- */ 	
 	
 
 /* -----
@@ -819,6 +921,30 @@ graph combine male_qreg_plot.gph female_qreg_plot.gph, ///
     xsize(9) ysize(5)
 	
 
+	
+	
+/* ------------------	
+Question 4	
+	
+After account for age and sex (+/- comorbidities, body size), 
+Does age-sex normalized PAd predict mortality better than just PAd? - brier score is best.
+— rather than AUC/time-dependent c-index, using an integrated Brier Score over 1-12 years. 
+
+Comparisons: 
+
+1: PAd, Agę, sex vs PA:AA, Agę, sex
+2: sex-age-norm PAd, Agę, sex vs sex-norm PA:AA, Agę, sex
+3: PAd, Agę, Sex, vs age-sex norm PaD, Age, Sex
+4: PA:AA, Age, Sex vs PA:AA, age, sex
+
+Then the same 4 with obesity, comorbidities included. 
+5
+6
+7
+8
+
+--------------------*/	
+	
 /* ------------------
 
 Survival Analysis
@@ -833,6 +959,176 @@ Non Z-score APPROACH
 
 --------------------*/ 
 
+
+
+
+
+
+/* ------------------
+Z-SCORE APPROACH
+
+Note: this is similar to the "LMS Method" used for things like PFTs - but without the skew part since the distributions don't seem very skewed. 
+
+Overall aim: 
+-- model age, sex specific PAd z-score - modeling both the changing mean and the changing spread. 
+-- then, create cox-HR directly from that (may or may not be non-linear)
+
+Downside? Heteroscedasticity
+
+the z‐scores represent "how far an individual's PA measurement is from the expected mean for someone of the same age and sex in this sample," - it's a valid internal standardization, but not necessarily representative of population norms
+
+------------------ */ 
+
+
+/* PA diameter */ 
+
+/* Generate within-sample z-score */ 
+regress mpad c.age i.male
+predict double mpad_hat
+gen double mpad_resid = mpad - mpad_hat
+egen double mpad_hat_z = std(mpad_resid)
+label variable mpad_hat_z "Age- & sex-adjusted PAd z-score"
+
+stcox mpad_hat_z
+estat ic
+estat concordance
+stbrier mpad_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to look into this. c-statistic much better.
+
+hist mpad_hat_z
+
+/* U shaped again (but not at 0,0) */ 
+preserve 
+gen mpad_hat_z_rounded = round(mpad_hat_z, 0.05)
+mkspline2 rc = mpad_hat_z_rounded, cubic nknots(4) displayknots            
+assert float(mpad_hat_z_rounded) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc* 
+estat ic
+estat concordance 
+levelsof mpad_hat_z_rounded if inrange(mpad_hat_z_rounded, -2, 2.65), local(levels)
+xblc rc*, covname(mpad_hat_z_rounded) at(`r(levels)') reference(0) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,-2,2.65), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(-2(0.5)2.65, labsize(large)) ///
+ xmtick(-2(0.25)2.65) ///
+ ylabel(0.125 0.25 0.5 1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("Sex-Normalized Pulmonary Artery Diameter (mm)", size(large)) ///
+ title("Age-adjusted Mortality Risk by PA Diameter", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) ///
+ xline(28, lp("shortdash_dot") lc(gs10))
+graph export "Results and Figures/$S_DATE/HR PAd Z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+restore
+
+
+
+/* Ascending Aorta */ 
+
+/* Generate within-sample z-score */ 
+
+* 1. Regress Ascending Aorta on Age and Sex
+regress ascendingaorta c.age i.male
+* 2. Predict the fitted/expected value
+predict double aa_hat
+* 3. Compute the residual = observed - predicted
+gen double aa_resid = ascendingaorta - aa_hat
+* 4. Standardize the residual to get the z-score
+egen double aa_hat_z = std(aa_resid)
+* 5. Label it meaningfully
+label variable aa_hat_z "Age- & Sex-adjusted Asc. Aorta Z-score"
+
+/* With Age & Sex Adjustment */ 
+stcox aa_hat_z
+estat ic
+estat concordance
+stbrier aa_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to look into this. c-statistic much better.
+
+hist aa_hat_z
+
+/* U-shape */ 
+preserve 
+gen aa_hat_z_rounded = round(aa_hat_z, 0.05)
+mkspline2 rc = aa_hat_z_rounded, cubic nknots(4) displayknots            
+assert float(aa_hat_z_rounded) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc*
+estat ic
+estat concordance
+levelsof aa_hat_z_rounded if inrange(aa_hat_z_rounded, -2, 2.5), local(levels)
+xblc rc*, covname(aa_hat_z_rounded) at(`r(levels)') reference(-0.1) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,-2,2.5), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(-2(0.5)2.5, labsize(large)) ///
+ xmtick(-2(0.25)2.5) ///
+ ylabel(0.125 0.25 0.5 1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("Asc Aorta Diameter z-score (mm)", size(large)) ///
+ title("Mortality Risk by AA Diameter Z-score", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) 
+graph export "Results and Figures/$S_DATE/HR AA z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+restore
+
+
+
+/* Ratio */ 
+
+/* Generate within-sample z-score */ 
+regress mpaaa c.age i.male
+predict double mpaaa_hat
+gen double mpaaa_resid = mpaaa - mpaaa_hat
+egen double mpaaa_hat_z = std(mpaaa_resid)
+label var mpaaa_hat_z "Age- & Sex-adjusted PA:AA Z-score"
+
+hist mpaaa_hat_z
+
+/* With Age-sex adjustment */ 
+stcox mpaaa_hat_z
+estat ic
+estat concordance
+stbrier mpaaa_hat_z, bt(12.4819)
+
+preserve 
+gen mpaaa_hat_z_rounded = round(mpaaa_hat_z, 0.02)
+mkspline2 rc = mpaaa_hat_z_rounded, cubic nknots(4) displayknots            
+assert float(mpaaa_hat_z_rounded) == float(rc1)
+stbrier rc*, bt(12.4819)
+stcox rc*
+estat ic
+estat concordance
+levelsof mpaaa_hat_z_rounded if inrange(mpaaa_hat_z_rounded, -2.5, 2), local(levels)
+xblc rc*, covname(mpaaa_hat_z_rounded) at(`r(levels)') reference(-0) eform generate(pa or lb ub)
+twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
+ (line or pa, sort lc(black) lp(l)) if inrange(pa,-2.51,2.01), ///
+ yscale(log extend) ///
+ scheme(cleanplots) ///
+ legend(off) ///
+ xlabel(-2.5(.5)2, labsize(large)) ///
+ xmtick(-2.5(0.25)2) ///
+ ylabel(1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
+ ytitle("Hazard Ratio of Mortality", size(large)) ///
+ xtitle("PA:AA z-score", size(large)) ///
+ title("PA:AA z-score Mortality Risk", size(vlarge)) ///
+ yline(1, lp("shortdash") lc(gs10)) ///
+ xline(28, lp("shortdash_dot") lc(gs10))
+graph export "Results and Figures/$S_DATE/HR PAAA z score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+restore
+
+
+
+
+
+
+// [ ] TODO: compare z-score to non-z-score in terms of predictiveness. 
+
+
+
+/*
 /* First, split into tertiles */ 
 
 /* MPAD */ 
@@ -860,8 +1156,8 @@ sts graph, by(mpad_tertile) tmax(10) ci surv ///
 
 stcox i.mpad_tertile
 estat concordance
-stbrier i.mpad_tertile, bt(12.4819)
-
+stbrier i.mpad_tertile, at(1 2 3 4 5)
+stbrier, at(1(1)5) integ
 
 /* Add age and sex */ 
 
@@ -883,10 +1179,6 @@ stcurve, surv at(mpad_tertile=1 male=0.3737 age=52) /// at mean values
           legend(order(1 "MPA Tertile 1" 2 "MPA Tertile 2" 3 "MPA Tertile 3") ///
                  position(6) ring(0) rows(1) size(medsmall)) 
 
-				 
-				 
-				 
-				 
 				 
 				 
 /* Using the Cao Tertiles */ 
@@ -938,12 +1230,7 @@ stcurve, surv at(cao_mpad_tertile=1 male=0.3737 age=52) /// at mean values
           legend(order(1 "MPA Tertile 1 (Cao)" 2 "MPA Tertile 2 (Cao)" 3 "MPA Tertile 3 (Cao)") ///
                  position(6) ring(0) rows(1) size(medsmall)) 				 
 				 
-				 
-	
-					
-					
-					
-					
+								
 					
 /* -----
 PA:AA Ratio (MPAAA) 
@@ -984,9 +1271,9 @@ stcox i.mpaaa_tertile
 estat concordance
 
 /* -----
-Brier Score for MPAAA Tertile Model
+Brier Score for MPAAA Tertile Model - [ ] TODO need to integrate over all of these 
 -----*/ 
-stbrier i.mpaaa_tertile, bt(12.4819)
+stbrier i.mpaaa_tertile, bt(12.4819) //wrong
 
 //adding age
 stcox i.mpaaa_tertile c.age i.male
@@ -995,7 +1282,7 @@ estat concordance
 /* -----
 Brier Score for MPAAA Tertile Model
 -----*/ 
-stbrier i.mpaaa_tertile c.age i.male, bt(12.4819)
+stbrier i.mpaaa_tertile c.age i.male, bt(12.4819) //wrong 
 
 
 
@@ -1436,7 +1723,7 @@ Cox Proportional Hazards Model by PA:AA Predicted Tertile
 /* -----
 Brier Score for PA:AA Tertile Model
 -----*/ 
-stbrier i.mpaaa_tertile, bt(12.4819)
+stbrier i.mpaaa_tertile, bt(12.4819) //wrong
 
 
 /* -----
@@ -1448,12 +1735,28 @@ estat concordance
 /* -----
 Brier Score for PA:AA Tertile Model
 -----*/ 
-stbrier i.mpaaa_tertile, bt(12.4819)
+stbrier i.mpaaa_tertile, bt(12.4819) //wrong 
 	
 	
+
+*/
+
+
+
+
 	
+
 	
-	
+/* ---------------
+
+Question 5:  Does age-sex normalized PAd still predict mortality after accounting for AA? 
++/- after covariates
+[ ] how does this compare to asking about the ratio?
+
+2 models: Only using splines. 
+1. PAd age sex aa vs sex normal pad age sex aa
+2. same, with comorbidities. [would this be overfit?]
+*/ 	
 	
 /* Create Bivariate Prediction Model with PAd and AA (and age + sex) */ 
 
@@ -1696,179 +1999,6 @@ restore
 
 
 
-
-
-
-
-/* ------------------
-Z-SCORE APPROACH
-
-Note: this is similar to the "LMS Method" used for things like PFTs - but without the skew part since the distributions don't seem very skewed. 
-
-Overall aim: 
--- model age, sex specific PAd z-score - modeling both the changing mean and the changing spread. 
--- then, create cox-HR directly from that (may or may not be non-linear)
-
-Downside? Heteroscedasticity
-
-the z‐scores represent "how far an individual's PA measurement is from the expected mean for someone of the same age and sex in this sample," - it's a valid internal standardization, but not necessarily representative of population norms
-
------------------- */ 
-
-
-/* PA diameter */ 
-
-/* Generate within-sample z-score */ 
-regress mpad c.age i.male
-predict double mpad_hat
-gen double mpad_resid = mpad - mpad_hat
-egen double mpad_hat_z = std(mpad_resid)
-label variable mpad_hat_z "Age- & sex-adjusted PAd z-score"
-
-stcox mpad_hat_z
-estat ic
-estat concordance
-stbrier mpad_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to look into this. c-statistic much better.
-
-hist mpad_hat_z
-
-/* U shaped again (but not at 0,0) */ 
-preserve 
-gen mpad_hat_z_rounded = round(mpad_hat_z, 0.05)
-mkspline2 rc = mpad_hat_z_rounded, cubic nknots(4) displayknots            
-assert float(mpad_hat_z_rounded) == float(rc1)
-stbrier rc*, bt(12.4819)
-stcox rc* 
-estat ic
-estat concordance 
-levelsof mpad_hat_z_rounded if inrange(mpad_hat_z_rounded, -2, 2.65), local(levels)
-xblc rc*, covname(mpad_hat_z_rounded) at(`r(levels)') reference(0) eform generate(pa or lb ub)
-twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
- (line or pa, sort lc(black) lp(l)) if inrange(pa,-2,2.65), ///
- yscale(log extend) ///
- scheme(cleanplots) ///
- legend(off) ///
- xlabel(-2(0.5)2.65, labsize(large)) ///
- xmtick(-2(0.25)2.65) ///
- ylabel(0.125 0.25 0.5 1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
- ytitle("Hazard Ratio of Mortality", size(large)) ///
- xtitle("Sex-Normalized Pulmonary Artery Diameter (mm)", size(large)) ///
- title("Age-adjusted Mortality Risk by PA Diameter", size(vlarge)) ///
- yline(1, lp("shortdash") lc(gs10)) ///
- xline(28, lp("shortdash_dot") lc(gs10))
-graph export "Results and Figures/$S_DATE/HR PAd Z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
-restore
-
-
-
-/* Ascending Aorta */ 
-
-/* Generate within-sample z-score */ 
-
-* 1. Regress Ascending Aorta on Age and Sex
-regress ascendingaorta c.age i.male
-* 2. Predict the fitted/expected value
-predict double aa_hat
-* 3. Compute the residual = observed - predicted
-gen double aa_resid = ascendingaorta - aa_hat
-* 4. Standardize the residual to get the z-score
-egen double aa_hat_z = std(aa_resid)
-* 5. Label it meaningfully
-label variable aa_hat_z "Age- & Sex-adjusted Asc. Aorta Z-score"
-
-/* With Age & Sex Adjustment */ 
-stcox aa_hat_z
-estat ic
-estat concordance
-stbrier aa_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to look into this. c-statistic much better.
-
-hist aa_hat_z
-
-/* U-shape */ 
-preserve 
-gen aa_hat_z_rounded = round(aa_hat_z, 0.05)
-mkspline2 rc = aa_hat_z_rounded, cubic nknots(4) displayknots            
-assert float(aa_hat_z_rounded) == float(rc1)
-stbrier rc*, bt(12.4819)
-stcox rc*
-estat ic
-estat concordance
-levelsof aa_hat_z_rounded if inrange(aa_hat_z_rounded, -2, 2.5), local(levels)
-xblc rc*, covname(aa_hat_z_rounded) at(`r(levels)') reference(-0.1) eform generate(pa or lb ub)
-twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
- (line or pa, sort lc(black) lp(l)) if inrange(pa,-2,2.5), ///
- yscale(log extend) ///
- scheme(cleanplots) ///
- legend(off) ///
- xlabel(-2(0.5)2.5, labsize(large)) ///
- xmtick(-2(0.25)2.5) ///
- ylabel(0.125 0.25 0.5 1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
- ytitle("Hazard Ratio of Mortality", size(large)) ///
- xtitle("Asc Aorta Diameter z-score (mm)", size(large)) ///
- title("Mortality Risk by AA Diameter Z-score", size(vlarge)) ///
- yline(1, lp("shortdash") lc(gs10)) 
-graph export "Results and Figures/$S_DATE/HR AA z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
-restore
-
-
-
-/* Ratio */ 
-
-/* Generate within-sample z-score */ 
-regress mpaaa c.age i.male
-predict double mpaaa_hat
-gen double mpaaa_resid = mpaaa - mpaaa_hat
-egen double mpaaa_hat_z = std(mpaaa_resid)
-label var mpaaa_hat_z "Age- & Sex-adjusted PA:AA Z-score"
-
-hist mpaaa_hat_z
-
-/* With Age-sex adjustment */ 
-stcox mpaaa_hat_z
-estat ic
-estat concordance
-stbrier mpaaa_hat_z, bt(12.4819)
-
-preserve 
-gen mpaaa_hat_z_rounded = round(mpaaa_hat_z, 0.02)
-mkspline2 rc = mpaaa_hat_z_rounded, cubic nknots(4) displayknots            
-assert float(mpaaa_hat_z_rounded) == float(rc1)
-stbrier rc*, bt(12.4819)
-stcox rc*
-estat ic
-estat concordance
-levelsof mpaaa_hat_z_rounded if inrange(mpaaa_hat_z_rounded, -2.5, 2), local(levels)
-xblc rc*, covname(mpaaa_hat_z_rounded) at(`r(levels)') reference(-1) eform generate(pa or lb ub)
-twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
- (line or pa, sort lc(black) lp(l)) if inrange(pa,-2.51,2.01), ///
- yscale(log extend) ///
- scheme(cleanplots) ///
- legend(off) ///
- xlabel(-2.5(.5)2, labsize(large)) ///
- xmtick(-2.5(0.25)2) ///
- ylabel(1 2 4, angle(horiz) format(%2.1fc) labsize(large)) ///
- ytitle("Hazard Ratio of Mortality", size(large)) ///
- xtitle("PA:AA z-score", size(large)) ///
- title("PA:AA z-score Mortality Risk", size(vlarge)) ///
- yline(1, lp("shortdash") lc(gs10)) ///
- xline(28, lp("shortdash_dot") lc(gs10))
-graph export "Results and Figures/$S_DATE/HR PAAA z score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
-restore
-
-
-
-
-
-
-// [ ] TODO: compare z-score to non-z-score in terms of predictiveness. 
-
-
-
-
-
-
-
-
 //Note: may need to move z-score generation up to here. 
 
 /* ------------- 
@@ -2035,138 +2165,3 @@ twoway (scatter mpad age) ///
        xtitle("Age (years)") ytitle("PA Size (mm)") ///
        title("Quantile Regression: PA Diameter vs Age") ///
        legend(order(2 "10th Quantile" 3 "50th Quantile (Median)" 4 "90th Quantile"))
-
-
-
-/*
-	Title:		Quantile Regression STATA Code
-	Author:		Aayush Khadka, Jilly Hebert, and Anusha Vable
-	Institution: University of California, San Francisco
-*/
-	
-	****************************************************************************
-	clear all
-	
-	** Setting directories and loading data
-	
-	
-	****************************************************************************
-	
-	** Mean Model
-	
-	****************************************************************************
-	
-	** Create OLS results sheet
-	putexcel set `saveloc'qr_results, modify sheet("OLS")
-	putexcel A1 = "quantile"	
-	putexcel B1 = "coef" //Saves school year estimate
-	putexcel C1 = "lci"	
-	putexcel D1 = "uci"	
-	
-	
-	** Bootstrap 95% CI's
-	regress sbp c.schlyrs c.age c.age2 i.gender i.race c.rameduc c.rafeduc //
-	i.southern i.year, vce(boostrap, reps(500))
-	
-	** Other modeling option
-	*regress sbp c.schlyrs c.age c.age2 i.female i.black i.latinx //
-	*c.rameduc c.rafeduc i.southern i.y08 i.y10 i.y12 i.y14 i.y16 i.y18, //
-	*vce(bootstrap, reps(500))
-	
-	
-	** Extracting results
-	matrix param = r(table)	
-	
-	** Storing results
-	putexcel A2 = -0.10
-	putexcel B2 = param[1,1]
-	putexcel C2 = param[5,1]
-	putexcel D2 = param[6,1]
-	
-	
-	****************************************************************************
-	
-	** Conditional Quantile Regression (CQR)
-	
-	****************************************************************************
-	
-	** Create CQR results sheet
-	putexcel set `saveloc'qr_results.xlsx, modify sheet("CQR")
-	putexcel A1 = "quantile"			
-	putexcel B1 = "coef" //Saves school year estimate
-	putexcel C1 = "lci"	
-	putexcel D1 = "uci"	
-	
-	** Creating a counter
-	local c = 2
-	
-	**Bootstrap 95% CIs
-	forval i=0.1(0.01)0.9 {
-		
-		bsqreg sbp c.schlyrs c.age c.age2 i.gender i.race //
-		c.rameduc c.rafeduc i.southern i.year, quantile(`i') reps(500)
-		
-		** Other modeling option
-		*bsqreg sbp c.schlyrs c.age c.age2 i.female i.black i.latinx //
-		*c.rameduc c.rafeduc i.southern i.y08 i.y10 i.y12 i.y14 i.y16 i.y18, //
-		*quantile(`i') reps(500)
-		
-		** Extracting results
-		matrix param = r(table)
-		
-		** Storing results
-		putexcel A`c' = `i'*100
-		putexcel B`c' = param[1,1]
-		putexcel C`c' = param[5,1]
-		putexcel D`c' = param[6,1]
-		
-		** Updating counter
-		local c = `c' + 1		
-		
-	}
-	
-	
-	****************************************************************************
-	
-	** Unconditional Quantile Regression (UQR)
-	
-	****************************************************************************
-	
-	** Create CQR results sheet
-	putexcel set `saveloc'qr_results.xlsx, modify sheet("UQR")
-	putexcel A1 = "quantile"			
-	putexcel B1 = "coef" //Saves school year estimate
-	putexcel C1 = "lci"	
-	putexcel D1 = "uci"	
-	
-	** Creating a counter
-	local c = 2
-	
-	**Bootstrap 95% CI's
-	forval i=10(1)90 {
-		
-		rifhdreg sbp c.schlyrs c.age c.age2 i.gender i.race c.rameduc //
-		c.rafeduc i.southern i.year, rif(q(`i')) vce(bootstrap, reps(500))
-		
-		** Other modeling option
-		*rifhdreg sbp c.schlyrs c.age c.age2 i.female i.black i.latinx //
-		*c.rameduc c.rafeduc i.southern i.y08 i.y10 i.y12 i.y14 i.y16 i.y18, //
-		*rif(q(`i')) vce(bootstrap, reps(500))
-		
-		** Extracting results
-		matrix param = r(table)
-		
-		** Storing results
-		putexcel A`c' = `i'
-		putexcel B`c' = param[1,1]
-		putexcel C`c' = param[5,1]
-		putexcel D`c' = param[6,1]
-		
-		** Updating counter
-		local c = `c' + 1		
-		
-	}
-	
-	
-	
-	   
