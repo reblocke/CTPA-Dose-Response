@@ -141,6 +141,27 @@ bysort aa_cat: sum sex_norm_aa, detail
 bysort aa_cat: sum ascendingaorta if male == 0, detail
 bysort aa_cat: sum ascendingaorta if male == 1, detail 
 
+
+/* Tertiles for EDA */ 
+
+xtile mpad_tertile = mpad, n(3)  // Divides into 3 equal-sized groups
+label define mpad_tertile_lbl 1 "MPAD Tertile 1" 2 "MPAD Tertile 2" 3 "MPAD Tertile 3"
+label values mpad_tertile mpad_tertile_lbl
+tab mpad_tertile
+
+xtile aa_tertile = ascendingaorta, n(3)  // Divides into 3 equal-sized groups
+label define aa_tertile_lbl 1 "AA Tertile 1" 2 "AA Tertile 2" 3 "AA Tertile 3"
+label values aa_tertile aa_tertile_lbl
+tab aa_tertile
+
+xtile mpaaa_tertile = mpaaa, n(3)  // Divides into 3 equal-sized groups
+label define mpaaa_tertile_lbl 1 "MPAAA Tertile 1" 2 "MPAAA Tertile 2" 3 "MPAAA Tertile 3"
+label values mpaaa_tertile mpaaa_tertile_lbl
+tab mpaaa_tertile
+
+
+
+
 save cleaned_noempi, replace
 
 clear
@@ -952,214 +973,6 @@ Survival Analysis
 --------------------*/
 stset lastfollowupyear, failure(death==1)
 
-capture program drop calc_ibs
-program define calc_ibs
-    version 17.0
-    syntax varlist(min=1)
-    local modelspec "`varlist'"
-    local sttime "`e(timevar)'"
-    local ststatus "`e(failvar)'"
-    
-    // Call the external Python script with the proper arguments
-    python script calc_ibs.py, args("`sttime'" "`ststatus'" "`modelspec'")
-end
-
-calc_ibs mpad age male
-
-/*
-program define calc_ibs, rclass
-	syntax anything(name=modelspec), [graph]
-
-	********************************************************************************
-	* Calculate integrated and normalized Brier score for a given Cox model
-	********************************************************************************
-
-	preserve
-
-	* Tokenize model spec: first variable = primary predictor
-	tokenize `modelspec'
-	local primary_predictor `1'
-	macro shift
-	local secondary_predictors `*'
-
-	di as text "Primary Predictor: `primary_predictor'"
-	di as text "Secondary Predictors: `secondary_predictors'"
-
-	* Time points (0–12 years, yearly)
-	local times 1 2 3 4 5 6 7 8 9 10 11 12
-
-	* Fixed IPCW adjustment
-	local ipcw_adjustment c.age i.male //i.obesity - has some missing values
-
-	********************************************************************************
-	* Compute Brier scores for each time point
-	********************************************************************************
-	foreach t of local times {
-		stbrier `primary_predictor' `secondary_predictors', ///
-			ipcw(`ipcw_adjustment') ///
-			btime(`t') ///   		
-			gen(br`t')
-	}
-
-	* Collapse to mean Brier score per time
-	collapse (mean) br*
-
-	* Add a row for time=0 with Brier=0
-	set obs `=_N + 1'
-	foreach t of local times {
-		local varname = "br`t'"
-		replace `varname' = 0 in l
-	}
-	gen order = _n
-	replace order = 0 in l
-	sort order
-
-	* Reshape long
-	gen id = _n
-	reshape long br, i(id) j(_t)
-	sort _t
-
-	* Trapezoidal rule to calculate integrated Brier score
-	gen t0 = _t[_n-1]
-	gen br0 = br[_n-1]
-	gen interval = _t - t0
-	gen area = 0.5 * (br + br0) * interval
-	replace area = . if _n == 1
-
-	summarize area, meanonly
-	scalar IBS = r(sum)
-	di as result "Integrated Brier Score (0..12): " IBS
-	return scalar IBS = IBS
-
-	gen normalized_area = area / 12
-	replace normalized_area = . if _n == 1
-
-	summarize normalized_area, meanonly
-	scalar normalized_IBS = r(sum)
-	di as result "Normalized IBS (0..12): " normalized_IBS
-	return scalar normalized_IBS = normalized_IBS
-
-	* Optional: Plot Brier score curve
-	if "`graph'" != "" {
-		line br _t if _t <= 12, sort ytitle("Brier Score") ///
-			xtitle("Time (years)") ///
-			title("Brier Score by Time") ///
-			scheme(white_w3d)
-	}
-
-	restore
-end
-*/ 
-
-
-
-******************************************************
-* 1) Example: Setting up survival in Stata
-******************************************************
-*    You mentioned:
-*      stset lastfollowupyear, failure(death == 1)
-*      stcox mpad c.age i.male
-*
-*    We won't actually run stcox here; just showing that
-*    you already have a time variable (lastfollowupyear),
-*    an event variable (death==1), and covariates (mpad, age, male).
-******************************************************
-
-* If not already done, ensure the data is survival-time ready:
-stset lastfollowupyear, failure(death == 1)
-
-***************************************************************
-* 2) Python block: pass data from Stata to Python, fit a Cox
-*    model via scikit-survival, and calculate IBS up to 12 years
-***************************************************************
-
-python:
-import sfi  # sfi = Stata Function Interface
-import numpy as np
-import pandas as pd
-
-# scikit-survival
-from sksurv.linear_model import CoxPHSurvivalAnalysis
-from sksurv.metrics import integrated_brier_score
-
-#
-# 2a) Extract data from Stata
-#
-
-# Let's read the relevant variables into Python.
-# We will create a pandas DataFrame for convenience.
-
-# Pull variables from current Stata dataset
-time_var    = 'lastfollowupyear'
-event_var   = 'death'
-covariates  = ['mpad', 'age', 'male']  # the same as stcox mpad c.age i.male (male is factor-coded in Stata, but let's keep it simple)
-
-# Get all data as columns
-time_data  = sfi.Data.get(time_var)
-event_data = sfi.Data.get(event_var)
-
-# Covariates come as a list of lists
-cov_data = {var: sfi.Data.get(var) for var in covariates}
-
-# Convert to pandas DataFrame
-df = pd.DataFrame({
-    time_var:  time_data,
-    event_var: event_data
-})
-for var in covariates:
-    df[var] = cov_data[var]
-
-# Drop any missing if needed (common in real data)
-df = df.dropna()
-
-# Convert the event/time into the structured array format required by sksurv
-# sksurv expects a structured array with dtype=[('event', bool), ('time', float)] 
-structured_y = np.array([
-    (bool(e), t) for e, t in zip(df[event_var], df[time_var])
-    ],
-    dtype=[('event', '?'), ('time', '<f8')]
-)
-
-# Covariates matrix
-X = df[covariates]
-
-#
-# 2b) Fit a Cox model using scikit-survival
-#
-cox_model = CoxPHSurvivalAnalysis()
-cox_model.fit(X, structured_y)
-
-#
-# 2c) Compute the Brier score over time, then integrate up to year = 12
-#
-# We need a grid of times at which to evaluate the predicted survival. 
-# If your data is in *years*, you can go from 0 to 12 in small steps:
-times_grid = np.linspace(0, 12, 100)  # 100 points up to year 12
-
-# Predict the survival function for each subject in X
-pred_surv_functions = cox_model.predict_survival_function(X)
-
-# `pred_surv_functions` is a list of callables; evaluate them at times_grid
-# producing a 2D array: predictions[sample, time_index]
-pred_surv = np.row_stack([
-    fn(times_grid) for fn in pred_surv_functions
-])
-
-# Now compute the IBS. For an "apparent" estimate, we can pass the same dataset
-# as both "training" and "testing" in integrated_brier_score. 
-# Real usage might do cross-validation for a more honest IBS.
-from sksurv.metrics import brier_score
-
-ibs_value = integrated_brier_score(structured_y, structured_y, pred_surv, times_grid)
-
-# Print or return IBS so we can capture it in Stata
-print("Integrated Brier Score (IBS) up to year 12: ", ibs_value)
-
-end
-
-
-
-
 /* First, generate within-sample Z-scores: 
 Note: this is similar to the "LMS Method" used for things like PFTs - but without the skew part since the distributions don't seem very skewed. 
 Overall aim: 
@@ -1198,31 +1011,74 @@ gen double mpaaa_resid = mpaaa - mpaaa_hat
 egen double mpaaa_hat_z = std(mpaaa_resid)
 label var mpaaa_hat_z "Age- & Sex-adjusted PA:AA Z-score"
 
+/* Tertiles */
+xtile z_mpad_tertile = mpad_hat_z, n(3)  // Divides into 3 equal-sized groups
+label define z_mpad_tertile_lbl 1 "Z MPAD Tertile 1" 2 "Z MPAD Tertile 2" 3 "Z PAD Tertile 3"
+label values z_mpad_tertile z_mpad_tertile_lbl
+tab z_mpad_tertile
+
+xtile z_aa_tertile = aa_hat_z, n(3)  // Divides into 3 equal-sized groups
+label define z_aa_tertile_lbl 1 "Z AA Tertile 1" 2 "Z AA Tertile 2" 3 "Z AA Tertile 3"
+label values z_aa_tertile z_aa_tertile_lbl
+tab z_aa_tertile
+
+xtile z_mpaaa_tertile = mpaaa_hat_z, n(3)  // Divides into 3 equal-sized groups
+label define z_mpaaa_tertile_lbl 1 "Z MPAAA Tertile 1" 2 "Z MPAAA Tertile 2" 3 "Z MPAAA Tertile 3"
+label values z_mpaaa_tertile z_mpaaa_tertile_lbl
+tab z_mpaaa_tertile
+
+
+
+tab mpad_tertile z_mpad_tertile
+kappaetc mpad_tertile z_mpad_tertile
+
+tab aa_tertile z_aa_tertile 
+kappaetc aa_tertile z_aa_tertile //agreement in aorta very low
+
+tab mpaaa_tertile z_mpaaa_tertile 
+kappaetc mpaaa_tertile z_mpaaa_tertile
 
 /* Comparison 1: PAd, Agę, sex vs PA:AA, Agę, sex */ 
 stcox mpad c.age i.male
 estat concordance //0.7578
-calc_ibs mpad c.age i.male, graph
+estat ic //AIC 3140.203
 
 stcox mpaaa c.age i.male
 estat concordance //0.7552
-calc_ibs mpaaa c.age i.male, graph
+estat ic //AIC 3141.973
+
+stcox i.mpad_tertile c.age i.male
+estat concordance //0.7554
+
+stcox i.mpaaa_tertile c.age i.male
+estat concordance //0.7529
+
+//todo: spline, 2 knots.
 
 
 /* Comparison 2: sex-age-norm PAd, Agę, sex vs sex-norm PA:AA, Agę, sex */ 
 stcox mpad_hat_z c.age i.male
 estat concordance //0.7578
-calc_ibs mpad_hat_z c.age i.male
+estat ic //AIC 3140.203
 
 stcox mpaaa_hat_z c.age i.male
-estat concordance //0.7552 = identical due to ranks? 
-calc_ibs mpaaa_hat_z c.age i.male
+estat concordance //0.7552 = identical due to ranks? - or to linear combinations of each - just a partitioning difference
+estat ic //AIC 3141.973
+
+/* Comparison 2: sex-age-norm PAd, Agę, sex vs sex-norm PA:AA, Agę, sex */ 
+stcox i.z_mpad_tertile c.age i.male
+estat concordance //0.7547
+
+stcox i.z_mpaaa_tertile c.age i.male
+estat concordance //0.7548 = identical due to ranks? 
 
 /* Comparison 3: PAd, Agę, Sex, vs age-sex norm PaD, Age, Sex */
 stcox mpad c.age i.male
+est store mpad_nonnorm
 estat concordance 
 
 stcox mpad_hat_z c.age i.male
+est store mpad_norm
 estat concordance 
 
 /* Comparison 4: PA:AA, Age, Sex vs age-sex norm PA:AA, age, sex */ 
@@ -1238,11 +1094,76 @@ estat concordance
 
 
 
+//Bivariate 
+stcox ib2.mpad_tertile##ib2.aa_tertile c.age i.male
+estat ic //aic 3149.0
+
+preserve
+stcox ib2.mpad_tertile##ib2.aa_tertile c.age c.male
+margins mpad_tertile#aa_tertile, at(age=50 male=0.5) ///
+    post expression(exp(predict(xb)))
+parmest, list(parm estimate) norestore
+gen str2 aa_str = regexs(1) if regexm(parm, "^([0-9]+)\.mpad_tertile")
+gen str2 mpad_str   = regexs(1) if regexm(parm, "#([0-9]+)\.aa_tertile$")
+destring mpad_str, gen(mpad) force
+destring aa_str, gen(aa) force
+drop parm mpad_str aa_str
+rename estimate hr_raw
+keep mpad aa hr_raw
+drop if missing(mpad) | missing(aa) | missing(hr_raw)
+gen byte is_ref = (mpad==2 & aa==2)
+summarize hr_raw if is_ref == 1, meanonly
+gen hr = hr_raw / r(mean)
+heatplot hr aa mpad, ///
+    ylabel(1 "MPAD Tertile 1" 2 "2 (ref)" 3 "3") ///
+    xlabel(1 "AA Tertile 1" 2 "2 (ref)" 3 "3") ///
+    ytitle("MPAD Tertile") xtitle("AA Tertile") ///
+    legend(title("HR (ref = [2,2])")) 
+restore
+
+stcox ib2.z_mpad_tertile##ib2.z_aa_tertile c.age i.male
+estat ic //aic 3154.769 - not better
+
+preserve
+stcox ib2.z_mpad_tertile##ib2.z_aa_tertile c.age c.male
+margins z_mpad_tertile#z_aa_tertile, at(age=50 male=0.5) ///
+    post expression(exp(predict(xb)))
+parmest, list(parm estimate) norestore
+gen str2 aa_str = regexs(1) if regexm(parm, "^([0-9]+)\.z_mpad_tertile")
+gen str2 mpad_str   = regexs(1) if regexm(parm, "#([0-9]+)\.z_aa_tertile$")
+destring mpad_str, gen(mpad) force
+destring aa_str, gen(aa) force
+drop parm mpad_str aa_str
+rename estimate hr_raw
+keep mpad aa hr_raw
+drop if missing(mpad) | missing(aa) | missing(hr_raw)
+gen byte is_ref = (mpad==2 & aa==2)
+summarize hr_raw if is_ref == 1, meanonly
+gen hr = hr_raw / r(mean)
+heatplot hr aa mpad, ///
+    ylabel(1 "MPAD Tertile 1" 2 "2 (ref)" 3 "3", labsize(small)) ///
+    xlabel(1 "AA Tertile 1" 2 "2 (ref)" 3 "3", labsize(small)) ///
+    ytitle("MPAD Tertile (Age- and Sex-Normalized)") ///
+    xtitle("AA Tertile (Age- and Sex-Normalized)") ///
+    legend(title("HR (ref = [2,2], normalized)")) 
+restore
+
+
+
+
+
+
+
+
+
+
+
+
 /* PA diameter */ 
 stcox mpad_hat_z
 estat ic
 estat concordance
-stbrier mpad_hat_z, bt(12.4819) //not sure why brier is higher here?  - need to look into this. c-statistic much better.
+stbrier mpad_hat_z, bt(5) 
 
 hist mpad_hat_z
 
@@ -1363,15 +1284,7 @@ restore
 
 /* MPAD */ 
 
-* Generate tertile cutoffs
-xtile mpad_tertile = mpad, n(3)  // Divides into 3 equal-sized groups
 
-* Label the tertile groups
-label define mpad_tertile_lbl 1 "MPAD Tertile 1" 2 "MPAD Tertile 2" 3 "MPAD Tertile 3"
-label values mpad_tertile mpad_tertile_lbl
-
-* Verify the tertile distribution
-tab mpad_tertile
 
 sts test mpad_tertile, logrank 
 sts graph, by(mpad_tertile) tmax(10) ci surv ///
@@ -1466,15 +1379,6 @@ stcurve, surv at(cao_mpad_tertile=1 male=0.3737 age=52) /// at mean values
 PA:AA Ratio (MPAAA) 
 -----*/ 
 
-* Generate tertile cutoffs for MPAAA
-xtile mpaaa_tertile = mpaaa, n(3)  // Divides into 3 equal-sized groups
-
-* Label the tertile groups
-label define mpaaa_tertile_lbl 1 "MPAAA Tertile 1" 2 "MPAAA Tertile 2" 3 "MPAAA Tertile 3"
-label values mpaaa_tertile mpaaa_tertile_lbl
-
-* Verify the tertile distribution
-tab mpaaa_tertile
 
 /* -----
 Survival Analysis by MPAAA Tertile
