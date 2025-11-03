@@ -1,5 +1,5 @@
-//cd "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/Pulm Artery Stuff w Scarps/Local Analysis"
-cd "/Users/reblocke/Research/CTPA-Dose-Response"
+cd "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/Pulm Artery Stuff w Scarps/Local Analysis"
+//cd "/Users/reblocke/Research/CTPA-Dose-Response"
 
 
 capture mkdir "Results and Figures"
@@ -8,166 +8,33 @@ capture mkdir "Results and Figures/$S_DATE/Logs/" //new folder for stata logs
 local a1=substr(c(current_time),1,2)
 local a2=substr(c(current_time),4,2)
 local a3=substr(c(current_time),7,2)
-local b = "Age-Metric Analysis.do" // do file name
-copy "`b'" "Results and Figures/$S_DATE/Logs/(`a1'_`a2'_`a3')`b'"
-
-use final_noempi, clear
+//local b = "Age-Metric Analysis.do" // do file name
+//copy "`b'" "Results and Figures/$S_DATE/Logs/(`a1'_`a2'_`a3')`b'"
 
 set scheme cleanplots //cleanplots white_tableau white_w3d //3 options I usually use
 
-missings dropobs, force //drop all rows with no observations. None
-missings dropvars, force //drop all columns with no observations
-missings report
-mdesc
-codebook
-count // n=990
-count if lastfollowupday==0 // n=78 without any follow-up data
-
-/* -----
-Data Cleaning 
---------*/ 
-
-label variable age "Age (years)"
-
-label define male_lab 0 "Female" 1 "Male"
-label variable male "Male Sex?"
-label values male male_lab
-
-bysort obesity: sum bmi, detail
-label variable obesity "Obesity (ICD only)"
-
-generate obesity_calc = . 
-replace obesity_calc = 0 if !missing(obesity) & obesity == 0
-replace obesity_calc = 1 if !missing(obesity) & obesity == 1
-replace obesity_calc = 1 if !missing(bmi) & bmi >= 30
-replace obesity_calc = 0 if !missing(bmi) & bmi < 30
-label define obesity_calc_lab 0 "Not Obese" 1 "Obese"
-label variable obesity_calc "Obesity"
-label values obesity_calc obesity_calc_lab
-tab obesity obesity_calc, missing
-tab obesity_calc, missing
-tab obesity, missing
-
-//traditional cutpoints
-label variable enlargedratio "PA:AA Ratio"
-label define enlargedratio_lab 0 "Normal PA:AA (<0.9)" 1 "Increased PA:AA (0.9+)"
-label values enlargedratio enlargedratio_lab
-
-label variable enlargedpa "PA diameter"
-label define enlargedpa_lab 0 "Normal PAd" 1 "Enlarged PAd"
-label values enlargedpa enlargedpa_lab
-
-gen pa_confusion_matrix = .
-replace pa_confusion_matrix = 0 if (enlargedpa == 0) & (enlargedratio == 0)
-replace pa_confusion_matrix = 1 if (enlargedpa == 1) & (enlargedratio == 0)
-replace pa_confusion_matrix = 2 if (enlargedpa == 0) & (enlargedratio == 1)
-replace pa_confusion_matrix = 3 if (enlargedpa == 1) & (enlargedratio == 1)
-label variable pa_confusion_matrix "PAd high, PA:AA high, neither, or both?"
-label define pa_confusion_lab 0 "Neither" 1 "Only Enlarged PAd" 2 "Only High PA:AA" 3 "Both"
-label values pa_confusion_matrix pa_confusion_lab
-tab enlargedpa pa_confusion_matrix, col //sanity checks
-tab enlargedratio pa_confusion_matrix 
-
-//label comorbdities
-label variable pulmdisease "Pulmonary Disease"
-label variable chf "Congestive Heart Failure"
-label variable diabetes3 "Diabetes"
-label define diabetes_val 0 "No DM" 1 "Uncomplicated DM" 2 "DM with Complication(s)"
-label values diabetes3 diabetes_val 
-label variable hypertension "Hypertension"
-label variable pulmonarycircdisorder "Pulm Circ. Disorder"
-label variable peripheralvascdisorders "Periph Vasc. Disease"
-label variable renalfailure "Kidney Disease"
-
-// Split diabetes into complicated vs not. 
-tab diabetes3
-capture drop diabetes1
-gen diabetes1=cond(diabetes3==1,1,0)
-tab diabetes3 diabetes1, missing
-capture drop diabetes2
-gen diabetes2=cond(diabetes3==2,1,0)
-tab diabetes3 diabetes2, missing
-label variable diabetes1 "Uncomplicated Diabetes"
-label variable diabetes2 "Diabetes with Complication(s)"
-
-// Outcomes
-label variable death "Death"
-label define death_label 0 "Alive or Censored" 1 "Died"
-label values death death_label
-label variable lastfollowupyear "Follow-up or death(years)"
-
-label variable anyemergency "Any Emergency Visits in Follow-up?"
-label variable anyadmission "Any Hospital Admission in Follow-up?"
-
-gen time_of_death = lastfollowupyear if death == 1
-label variable time_of_death "Time of Death"
-gen time_of_censoring = lastfollowupyear if death != 1
-label variable time_of_censoring "Time of longest follow-up alive"
-
-//Categorizations of continuous variables; for graphs
-recode age min/30=0 30/40=1 40/50=2 50/60=3 60/70=4 70/max=5, gen(age_decade)
-label define age_dec_lab 0 "<30 years" 1 "30-40 years" 2 "40-50 years" 3 "50-60 years" 4 "60-70 years" 5 "70+ years"
-label variable age_decade "Age (by decade)"
-label values age_decade age_dec_lab 
-
-
-
-/*. 
-Should we not use these? 
-*/ 
-
-gen sex_norm_mpad = .
-replace sex_norm_mpad = mpad + 1 if male == 0
-replace sex_norm_mpad = mpad - 1 if male == 1
-sum sex_norm_mpad, detail
-recode sex_norm_mpad min/25=0 25/28=1 28/31=2 31/max=3, gen(mpad_cat) 
-label define mpad_cat_lab 0 "F:<24 mm, M:<26 mm" 1 "F:24-27 mm, M:26-29 mm" 2 "F:27-30 mm, M:29-32 mm" 3 "F:30+ mm, M32+ mm"
-//TODO: Cutpoints for mPA were defined with ≤27 mm(F) and ≤29 mm(M) as the normal reference range; mild as >27 to <31 mm(F) and >29 to <31 mm(M); moderate≥31–34 mm; and severe>34 mm.  from -  Truong QA, Bhatia HS, Szymonifka J, et al. A four-tier classification system of pulmonary artery metrics on computed tomography for the diagnosis and prognosis of pulmonary hypertension. J Cardiovasc Comput Tomogr 2018;12(1):60–66.
-label variable mpad_cat "PA_d strata"
-label values mpad_cat mpad_cat_lab 
-bysort mpad_cat: sum sex_norm_mpad, detail
-bysort mpad_cat: sum mpad if male == 0, detail  //sanity check
-bysort mpad_cat: sum mpad if male == 1, detail  //sanity check
-
-gen sex_norm_aa = .
-replace sex_norm_aa = ascendingaorta + 1.5 if male == 0 //men 3mm larger; more dispersion (not accounted for)
-replace sex_norm_aa = ascendingaorta - 1.5 if male == 1
-sum sex_norm_aa, detail
-recode sex_norm_aa min/30=0 30/33.5=1 33.5/37=2 37/max=3, gen(aa_cat)
-label define aa_cat_lab 0 "F:<28.5 mm, M:<31.5 mm" 1 "F:28.5-32 mm, M:31.5-35 mm" 2 "F:32-35.5 mm, M:35-38.5mm" 3 "F:35.5+mm, M:38.5+mm" //35 and 32 as thresholds (similar percentil as for MPAd) 33.5 as threshold for abn, roughly
-label variable aa_cat "AA_d strata"
-label values aa_cat aa_cat_lab 
-bysort aa_cat: sum sex_norm_aa, detail
-bysort aa_cat: sum ascendingaorta if male == 0, detail
-bysort aa_cat: sum ascendingaorta if male == 1, detail 
-
-
-/* Tertiles for EDA */ 
-
-xtile mpad_tertile = mpad, n(3)  // Divides into 3 equal-sized groups
-label define mpad_tertile_lbl 1 "MPAD Tertile 1" 2 "MPAD Tertile 2" 3 "MPAD Tertile 3"
-label values mpad_tertile mpad_tertile_lbl
-tab mpad_tertile
-
-xtile aa_tertile = ascendingaorta, n(3)  // Divides into 3 equal-sized groups
-label define aa_tertile_lbl 1 "AA Tertile 1" 2 "AA Tertile 2" 3 "AA Tertile 3"
-label values aa_tertile aa_tertile_lbl
-tab aa_tertile
-
-xtile mpaaa_tertile = mpaaa, n(3)  // Divides into 3 equal-sized groups
-label define mpaaa_tertile_lbl 1 "MPAAA Tertile 1" 2 "MPAAA Tertile 2" 3 "MPAAA Tertile 3"
-label values mpaaa_tertile mpaaa_tertile_lbl
-tab mpaaa_tertile
-
-
-
-
-save cleaned_noempi, replace
-
-clear
 use cleaned_noempi
 
 /* Analysis */ 
+
+/* 
+Clinical question / point
+
+Is the PA:AA ratio is problematic as a mortality risk predictor? 
+
+
+Base model: Age, Sex, Height, Weight. 
+
+Model 2 = Age, Sex, Height, Weight, and PA:AA
+Model 2 = Age, Sex, Height, Weight, and PA and AA 
+
+
+*/
+
+
+
+
+
 
 
 /* ---------
