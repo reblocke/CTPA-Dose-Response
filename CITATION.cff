@@ -1,0 +1,47 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite the accompanying work and this repository."
+title: "Pulmonary Artery Size and Mortality Dose-Response Analysis: repository materials"
+type: software
+repository-code: "https://github.com/reblocke/CTPA-Dose-Response"
+authors:
+  - family-names: Scarpato
+    given-names: Brandon M.
+  - family-names: Locke
+    given-names: Brian W.
+  - family-names: Bledsoe
+    given-names: Joshua
+  - family-names: Knox
+    given-names: Daniel B.
+  - family-names: Conner
+    given-names: K.
+  - family-names: Stoddard
+    given-names: Glen J.
+  - family-names: Cirulis
+    given-names: Megan M.
+  - family-names: Elliot
+    given-names: C. Gregory
+  - family-names: Dodson
+    given-names: Matthew W.
+preferred-citation:
+  type: article
+  title: "The association between pulmonary artery enlargement and mortality in an Emergency Department population undergoing computed tomography pulmonary angiography"
+  authors:
+    - family-names: Scarpato
+      given-names: Brandon M.
+    - family-names: Locke
+      given-names: Brian W.
+    - family-names: Bledsoe
+      given-names: Joshua
+    - family-names: Knox
+      given-names: Daniel B.
+    - family-names: Conner
+      given-names: K.
+    - family-names: Stoddard
+      given-names: Glen J.
+    - family-names: Cirulis
+      given-names: Megan M.
+    - family-names: Elliot
+      given-names: C. Gregory
+    - family-names: Dodson
+      given-names: Matthew W.
+  doi: "10.1002/pul2.12225"
