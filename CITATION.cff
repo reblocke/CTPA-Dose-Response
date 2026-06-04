@@ -1,47 +1,71 @@
 cff-version: 1.2.0
-message: "If you use this repository, please cite the accompanying work and this repository."
-title: "Pulmonary Artery Size and Mortality Dose-Response Analysis: repository materials"
+message: "If you use this repository, cite the CHEST 2023 abstract and the repository commit or release used."
+title: "CTPA Dose-Response Analysis: repository materials"
 type: software
 repository-code: "https://github.com/reblocke/CTPA-Dose-Response"
+url: "https://github.com/reblocke/CTPA-Dose-Response"
+license: MIT
 authors:
-  - family-names: Scarpato
-    given-names: Brandon M.
   - family-names: Locke
     given-names: Brian W.
+    orcid: "https://orcid.org/0000-0002-3588-5238"
+  - family-names: Scarpato
+    given-names: Brittany M.
   - family-names: Bledsoe
-    given-names: Joshua
+    given-names: Joseph
   - family-names: Knox
     given-names: Daniel B.
   - family-names: Conner
-    given-names: K.
+    given-names: Karen
   - family-names: Stoddard
-    given-names: Glen J.
+    given-names: Gregory J.
   - family-names: Cirulis
-    given-names: Megan M.
-  - family-names: Elliot
+    given-names: Meghan M.
+  - family-names: Elliott
     given-names: C. Gregory
   - family-names: Dodson
-    given-names: Matthew W.
+    given-names: Mark W.
+keywords:
+  - computed tomography pulmonary angiography
+  - pulmonary artery
+  - mortality
+  - dose-response
+  - survival analysis
+  - Stata
 preferred-citation:
-  type: article
-  title: "The association between pulmonary artery enlargement and mortality in an Emergency Department population undergoing computed tomography pulmonary angiography"
+  type: conference-paper
+  title: "Pulmonary Artery Size on CT and Mortality Risk: A Dose-Response Analysis"
   authors:
-    - family-names: Scarpato
-      given-names: Brandon M.
     - family-names: Locke
       given-names: Brian W.
+      orcid: "https://orcid.org/0000-0002-3588-5238"
+    - family-names: Scarpato
+      given-names: Brittany
     - family-names: Bledsoe
-      given-names: Joshua
+      given-names: Joseph
     - family-names: Knox
-      given-names: Daniel B.
+      given-names: Daniel
     - family-names: Conner
-      given-names: K.
+      given-names: Karen
     - family-names: Stoddard
-      given-names: Glen J.
+      given-names: Gregory J.
     - family-names: Cirulis
-      given-names: Megan M.
-    - family-names: Elliot
+      given-names: Meghan M.
+    - family-names: Elliott
       given-names: C. Gregory
     - family-names: Dodson
-      given-names: Matthew W.
-  doi: "10.1002/pul2.12225"
+      given-names: Mark W.
+  collection-title: "CHEST 2023 Annual Meeting Abstracts"
+  conference:
+    name: "CHEST 2023 Annual Meeting"
+    location: "Honolulu, HI, USA"
+    date-start: 2023-10-08
+    date-end: 2023-10-11
+  year: 2023
+  journal: "CHEST"
+  volume: "164"
+  issue: "4 Suppl"
+  start: A6004
+  end: A6005
+  doi: "10.1016/j.chest.2023.07.3871"
+  url: "https://doi.org/10.1016/j.chest.2023.07.3871"
