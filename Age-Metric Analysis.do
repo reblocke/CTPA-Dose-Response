@@ -1,19 +1,31 @@
-cd "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/Pulm Artery Stuff w Scarps/Local Analysis"
-//cd "/Users/reblocke/Research/CTPA-Dose-Response"
+version 17.0
+args input_root output_root
+if "`input_root'" == "" local input_root "data/private"
+if "`output_root'" == "" local output_root "outputs/stata"
 
-
-capture mkdir "Results and Figures"
-capture mkdir "Results and Figures/$S_DATE/" //make new folder for figure output if needed
-capture mkdir "Results and Figures/$S_DATE/Logs/" //new folder for stata logs
+capture mkdir "outputs"
+capture mkdir "`output_root'"
+local output_date = subinstr(strtrim(c(current_date)), " ", "-", .)
+local output_dir "`output_root'/`output_date'"
+capture mkdir "`output_dir'"
+capture mkdir "`output_dir'/Logs"
 local a1=substr(c(current_time),1,2)
 local a2=substr(c(current_time),4,2)
 local a3=substr(c(current_time),7,2)
-//local b = "Age-Metric Analysis.do" // do file name
-//copy "`b'" "Results and Figures/$S_DATE/Logs/(`a1'_`a2'_`a3')`b'"
+local b = "Age-Metric Analysis.do" // do file name
+capture copy "`b'" "`output_dir'/Logs/(`a1'_`a2'_`a3')`b'", replace
+capture log close _all
+log using "`output_dir'/Logs/(`a1'_`a2'_`a3')Age-Metric Analysis.log", replace text
 
 set scheme cleanplots //cleanplots white_tableau white_w3d //3 options I usually use
 
-use cleaned_noempi
+local cleaned_data "`input_root'/cleaned_noempi.dta"
+capture confirm file "`cleaned_data'"
+if _rc {
+	di as error "Required restricted input not found: `cleaned_data'"
+	exit 601
+}
+use "`cleaned_data'", clear
 
 /* Analysis */ 
 
@@ -72,7 +84,7 @@ time_of_death conts %4.1f \ ///
 time_of_death conts %4.1f \ /// 
 ) ///
 percent_n percsign("%") iqrmiddle(",") sdleft(" (±") sdright(")") onecol total(before) ///
-saving("Results and Figures/$S_DATE/Table 1 PA enlargement by Age.xlsx", replace)
+saving("`output_dir'/Table 1 PA enlargement by Age.xlsx", replace)
 
 
 /* Raw Data */ 
@@ -155,7 +167,7 @@ ridgeline mpad if male == 0, by(age_decade) yline ylw(0.2) overlap(1.7) ///
     showstats xlabel(15(5)40) palette(CET C6) alpha(75) ///
     xtitle("Pulmonary Artery Diameter (mm)") ///
     title("PA Diameter by Age Group - Female") ///
-    saving(ridgeline_female, replace)
+    saving("`output_dir'/ridgeline_female", replace)
 
 * Ridgeline plot for Males (male == 1)
 ridgeline mpad if male == 1, by(age_decade) yline ylw(0.2) overlap(1.7) ///
@@ -163,9 +175,9 @@ ridgeline mpad if male == 1, by(age_decade) yline ylw(0.2) overlap(1.7) ///
     showstats xlabel(15(5)40) palette(CET C6) alpha(75) ///
     xtitle("Pulmonary Artery Diameter (mm)") ///
     title("PA Diameter by Age Group - Male") ///
-    saving(ridgeline_male, replace)
+    saving("`output_dir'/ridgeline_male", replace)
 
-graph combine ridgeline_female.gph ridgeline_male.gph, ///
+graph combine "`output_dir'/ridgeline_female.gph" "`output_dir'/ridgeline_male.gph", ///
     title("Ridgeline Plot of PA Diameter by Age Group & Sex")
 
 
@@ -180,7 +192,7 @@ ridgeline ascendingaorta if male == 0, by(age_decade) yline ylw(0.2) overlap(1.7
     showstats xlabel(15(5)45) palette(CET C6) alpha(75) ///
     xtitle("Ascending Aorta Diameter (mm)") ///
     title("Ascending Aorta by Age Group - Female") ///
-    saving(ridgeline_aorta_female, replace)
+    saving("`output_dir'/ridgeline_aorta_female", replace)
 
 * Ridgeline plot for Males (male == 1) - Ascending Aorta
 ridgeline ascendingaorta if male == 1, by(age_decade) yline ylw(0.2) overlap(1.7) ///
@@ -188,9 +200,9 @@ ridgeline ascendingaorta if male == 1, by(age_decade) yline ylw(0.2) overlap(1.7
     showstats xlabel(15(5)45) palette(CET C6) alpha(75) ///
     xtitle("Ascending Aorta Diameter (mm)") ///
     title("Ascending Aorta by Age Group - Male") ///
-    saving(ridgeline_aorta_male, replace)
+    saving("`output_dir'/ridgeline_aorta_male", replace)
 
-graph combine ridgeline_aorta_female.gph ridgeline_aorta_male.gph, ///
+graph combine "`output_dir'/ridgeline_aorta_female.gph" "`output_dir'/ridgeline_aorta_male.gph", ///
     title("Ridgeline Plot of Ascending Aorta by Age & Sex")
 	
 	
@@ -205,7 +217,7 @@ ridgeline mpaaa if male == 0, by(age_decade) yline ylw(0.2) overlap(1.7) ///
     showstats xlabel(0.6(.1)1.3) palette(CET C6) alpha(75) ///
     xtitle("PA:AA Ratio") ///
     title("PA:AA Ratio by Age Group - Female") ///
-    saving(ridgeline_mpaaa_female, replace)
+    saving("`output_dir'/ridgeline_mpaaa_female", replace)
 
 * Ridgeline plot for Males (male == 1) - PA:AA Ratio
 ridgeline mpaaa if male == 1, by(age_decade) yline ylw(0.2) overlap(1.7) ///
@@ -213,9 +225,9 @@ ridgeline mpaaa if male == 1, by(age_decade) yline ylw(0.2) overlap(1.7) ///
     showstats xlabel(0.6(.1)1.3) palette(CET C6) alpha(75) ///
     xtitle("PA:AA Ratio") ///
     title("PA:AA Ratio by Age Group - Male") ///
-    saving(ridgeline_mpaaa_male, replace)
+    saving("`output_dir'/ridgeline_mpaaa_male", replace)
 
-graph combine ridgeline_mpaaa_female.gph ridgeline_mpaaa_male.gph, ///
+graph combine "`output_dir'/ridgeline_mpaaa_female.gph" "`output_dir'/ridgeline_mpaaa_male.gph", ///
     title("Ridgeline Plot of PA:AA Ratio by Age & Sex")
 	
 
@@ -437,7 +449,7 @@ twoway ///
     title("Men") ///
     xlabel(, labsize(medlarge)) ylabel(15(5)40, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(15 40)) ///
-    saving(male_qreg_plot, replace)
+    saving("`output_dir'/male_qreg_plot", replace)
 
 
 /* Run Bootstrap Quantile Regressions for the Women */
@@ -474,12 +486,12 @@ twoway ///
     title("Women") ///
     xlabel(, labsize(medlarge)) ylabel(15(5)40, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(15 40)) ///
-    saving(female_qreg_plot, replace)
+    saving("`output_dir'/female_qreg_plot", replace)
 
 /* -----
 Combine the Two Plots into a Single Figure
 -----*/ 
-graph combine male_qreg_plot.gph female_qreg_plot.gph, ///
+graph combine "`output_dir'/male_qreg_plot.gph" "`output_dir'/female_qreg_plot.gph", ///
     title("Sex-Stratified Quantile Regression of MPAD by Age") ///
     ycommon xcommon ///
     iscale(*1.2) ///
@@ -593,7 +605,7 @@ twoway ///
     title("Men") ///
     xlabel(, labsize(medlarge)) ylabel(15(5)50, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(15 50)) ///
-    saving(male_qreg_plot, replace)
+    saving("`output_dir'/male_qreg_plot", replace)
 
 
 /* Run Bootstrap Quantile Regressions for the Women */
@@ -630,12 +642,12 @@ twoway ///
     title("Women") ///
     xlabel(, labsize(medlarge)) ylabel(15(5)50, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(15 50)) ///
-    saving(female_qreg_plot, replace)
+    saving("`output_dir'/female_qreg_plot", replace)
 
 /* -----
 Combine the Two Plots into a Single Figure
 -----*/ 
-graph combine male_qreg_plot.gph female_qreg_plot.gph, ///
+graph combine "`output_dir'/male_qreg_plot.gph" "`output_dir'/female_qreg_plot.gph", ///
     title("Sex-Stratified Quantile Regression of Ascending Aorta by Age") ///
     ycommon xcommon ///
     iscale(*1.2) ///
@@ -758,7 +770,7 @@ twoway ///
     title("Men") ///
     xlabel(, labsize(medlarge)) ylabel(0.6(0.1)1.3, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(0.6 1.3)) ///
-    saving(male_qreg_plot, replace)
+    saving("`output_dir'/male_qreg_plot", replace)
 
 
 /* Run Bootstrap Quantile Regressions for the Women */
@@ -795,12 +807,12 @@ twoway ///
     title("Women") ///
     xlabel(, labsize(medlarge)) ylabel(0.6(0.1)1.3, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(0.6 1.3)) ///
-    saving(female_qreg_plot, replace)
+    saving("`output_dir'/female_qreg_plot", replace)
 
 /* -----
 Combine the Two Plots into a Single Figure
 -----*/ 
-graph combine male_qreg_plot.gph female_qreg_plot.gph, ///
+graph combine "`output_dir'/male_qreg_plot.gph" "`output_dir'/female_qreg_plot.gph", ///
     title("Sex-Stratified Quantile Regression of PA:AA Ratio by Age") ///
     ycommon xcommon ///
     iscale(*1.2) ///
@@ -1058,7 +1070,7 @@ twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
  title("Age-adjusted Mortality Risk by PA Diameter", size(vlarge)) ///
  yline(1, lp("shortdash") lc(gs10)) ///
  xline(28, lp("shortdash_dot") lc(gs10))
-graph export "Results and Figures/$S_DATE/HR PAd Z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+graph export "`output_dir'/HR PAd Z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
 restore
 
 
@@ -1096,7 +1108,7 @@ twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
  xtitle("Asc Aorta Diameter z-score (mm)", size(large)) ///
  title("Mortality Risk by AA Diameter Z-score", size(vlarge)) ///
  yline(1, lp("shortdash") lc(gs10)) 
-graph export "Results and Figures/$S_DATE/HR AA z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+graph export "`output_dir'/HR AA z-score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
 restore
 
 
@@ -1134,7 +1146,7 @@ twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
  title("PA:AA z-score Mortality Risk", size(vlarge)) ///
  yline(1, lp("shortdash") lc(gs10)) ///
  xline(28, lp("shortdash_dot") lc(gs10))
-graph export "Results and Figures/$S_DATE/HR PAAA z score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+graph export "`output_dir'/HR PAAA z score Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
 restore
 
 
@@ -1342,7 +1354,7 @@ twoway ///
     title("Men") ///
     xlabel(, labsize(medlarge)) ylabel(15(5)40, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(15 40)) ///
-    saving(male_qreg_plot, replace)
+    saving("`output_dir'/male_qreg_plot", replace)
 
 
 /* -----
@@ -1374,13 +1386,13 @@ twoway ///
     title("Women") ///
     xlabel(, labsize(medlarge)) ylabel(15(5)40, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(15 40)) ///
-    saving(female_qreg_plot, replace)
+    saving("`output_dir'/female_qreg_plot", replace)
 
 
 /* -----
 Combine the Two Plots into a Single Figure
 -----*/ 
-graph combine male_qreg_plot.gph female_qreg_plot.gph, ///
+graph combine "`output_dir'/male_qreg_plot.gph" "`output_dir'/female_qreg_plot.gph", ///
     title("Sex-Stratified Quantile Regression of MPAD by Predicted Tertile") ///
     ycommon xcommon ///
     iscale(*1.2) ///
@@ -1582,7 +1594,7 @@ twoway ///
     title("Men") ///
     xlabel(, labsize(medlarge)) ylabel(0.6(0.1)1.3, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(0.6 1.3)) ///
-    saving(male_qreg_plot, replace)
+    saving("`output_dir'/male_qreg_plot", replace)
 
 
 /* -----
@@ -1614,13 +1626,13 @@ twoway ///
     title("Women") ///
     xlabel(, labsize(medlarge)) ylabel(0.6(0.1)1.3, nogrid labsize(medlarge)) /// Adjusted Y-axis range
     scheme(white_w3d) yscale(range(0.6 1.3)) ///
-    saving(female_qreg_plot, replace)
+    saving("`output_dir'/female_qreg_plot", replace)
 
 
 /* -----
 Combine the Two Plots into a Single Figure
 -----*/ 
-graph combine male_qreg_plot.gph female_qreg_plot.gph, ///
+graph combine "`output_dir'/male_qreg_plot.gph" "`output_dir'/female_qreg_plot.gph", ///
     title("Sex-Stratified Quantile Regression of PA:AA Ratio by Predicted Tertile") ///
     ycommon xcommon ///
     iscale(*1.2) ///
@@ -1876,7 +1888,7 @@ restore
 
 
 heatplot pa_aa_spline_model_pr mpad ascendingaorta, cut(0(0.05)1) aspectratio(0.7) xlabel( 2.0(0.5)6.5,angle(vertical) labsize(3)) ylabel(15(5)45 ,labsize(3)) ybwidth(1) xbwidth(0.1) ytitle("AA", size(4)) xtitle("PA", size(4)) color(YlOrRd) ramp(right format(%3.2f) space(18) subtitle("Predicted" "HR of" "Death", size(small) justification(center)) label(0(0.1)1, labsize(3)) ) p(lcolor(black%10) lwidth(*0.15)) xsize(3.5) ysize(3.5) clip
-graph export "Results and Figures/$S_DATE/Predicted Hypercap by HCO3 and K w splines.png", as(png) name("Graph") replace
+graph export "`output_dir'/Predicted Hypercap by HCO3 and K w splines.png", as(png) name("Graph") replace
 
 //TODO: separate spines for each encounter type?
 restore
@@ -1961,7 +1973,7 @@ twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
  xtitle("Asc Aorta Diameter (mm)", size(large)) ///
  title("Mortality Risk by AA Diameter", size(vlarge)) ///
  yline(1, lp("shortdash") lc(gs10)) 
-graph export "Results and Figures/$S_DATE/HR AA Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
+graph export "`output_dir'/HR AA Splines - Whole Cohort Adj AgeSex.png", as(png) name("Graph") replace
 restore
 
 /* MPAAA */ 
@@ -1995,7 +2007,7 @@ twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
  title("PA:AA Mortality Risk", size(vlarge)) ///
  yline(1, lp("shortdash") lc(gs10)) ///
  xline(28, lp("shortdash_dot") lc(gs10))
-graph export "Results and Figures/$S_DATE/HR PAAA Splines - Whole Cohort.png", as(png) name("Graph") replace
+graph export "`output_dir'/HR PAAA Splines - Whole Cohort.png", as(png) name("Graph") replace
 restore
 
 
@@ -2054,7 +2066,7 @@ twoway (line lb ub pa, sort lc(black black) lp(longdash longdash)) ///
  title("PA:AA Mortality Risk", size(vlarge)) ///
  yline(1, lp("shortdash") lc(gs10)) ///
  xline(28, lp("shortdash_dot") lc(gs10))
-graph export "Results and Figures/$S_DATE/HR PAAA Splines - Whole Cohort.png", as(png) name("Graph") replace
+graph export "`output_dir'/HR PAAA Splines - Whole Cohort.png", as(png) name("Graph") replace
 	
 
 restore
@@ -2123,20 +2135,20 @@ twoway ///
 
 
 twoway lfitci mpad age, stdf ciplot(rline) || scatter mpad age ||, xlabel(,labsize(medlarge)) ylabel(,labsize(medlarge)) xtitle("Age (years)", size(4)) ytitle("PA Size (mm)", size(4)) scheme(white_w3d) legend(off) title("Pulmonary Artery Diameter") xsize(5) ysize(5)
-graph save "temp_mpad_age.gph", replace
+graph save "`output_dir'/temp_mpad_age.gph", replace
 
 twoway lfitci ascendingaorta age, stdf ciplot(rline) || scatter ascendingaorta age ||, xlabel(,labsize(medlarge)) ylabel(,labsize(medlarge)) xtitle("Age (years)", size(4)) ytitle("Ascending Aorta (mm)", size(4)) scheme(white_tableau) legend(off) title("Ascending Aorta Diameter") xsize(5) ysize(5)
-graph save "temp_aad_age.gph", replace
+graph save "`output_dir'/temp_aad_age.gph", replace
 
 twoway lfitci mpaaa age, stdf ciplot(rline) || scatter mpaaa age ||, xlabel(,labsize(medlarge)) ylabel(,labsize(medlarge)) xtitle("Age years", size(4)) ytitle("PA:AA Ratio", size(4)) scheme(white_jet) legend(off) title("PA to AA Ratio") xsize(5) ysize(5)
-graph save "temp_ratio_age.gph", replace
+graph save "`output_dir'/temp_ratio_age.gph", replace
 
-graph combine temp_mpad_age.gph temp_aad_age.gph temp_ratio_age.gph, ///
+graph combine "`output_dir'/temp_mpad_age.gph" "`output_dir'/temp_aad_age.gph" "`output_dir'/temp_ratio_age.gph", ///
  col(3) ///
  imargin(0 0 0 0) graphregion(margin(l=22 r=22)) ///
  note("95% Prediction Intervals Indicated by Grey Lines", pos(6)) ///
  xsize(9) ysize(3)
-graph export "Results and Figures/$S_DATE/PA AA PAAA by Age continuous.png", as(png) name("Graph") replace
+graph export "`output_dir'/PA AA PAAA by Age continuous.png", as(png) name("Graph") replace
 
 */ 
 	
