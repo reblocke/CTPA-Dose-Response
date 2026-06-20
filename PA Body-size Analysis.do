@@ -1,20 +1,32 @@
-cd "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/Pulm Artery Stuff w Scarps/Local Analysis"
-//cd "/Users/reblocke/Research/CTPA-Dose-Response"
+version 17.0
+args input_root output_root
+if "`input_root'" == "" local input_root "data/private"
+if "`output_root'" == "" local output_root "outputs/stata"
 
-
-capture mkdir "Results and Figures"
-capture mkdir "Results and Figures/$S_DATE/" //make new folder for figure output if needed
-capture mkdir "Results and Figures/$S_DATE/Logs/" //new folder for stata logs
+capture mkdir "outputs"
+capture mkdir "`output_root'"
+local output_date = subinstr(strtrim(c(current_date)), " ", "-", .)
+local output_dir "`output_root'/`output_date'"
+capture mkdir "`output_dir'"
+capture mkdir "`output_dir'/Logs"
 local a1=substr(c(current_time),1,2)
 local a2=substr(c(current_time),4,2)
 local a3=substr(c(current_time),7,2)
-//local b = "Body-size Analysis.do" // do file name
-//copy "`b'" "Results and Figures/$S_DATE/Logs/(`a1'_`a2'_`a3')`b'"
+local b = "PA Body-size Analysis.do" // do file name
+capture copy "`b'" "`output_dir'/Logs/(`a1'_`a2'_`a3')`b'", replace
+capture log close _all
+log using "`output_dir'/Logs/(`a1'_`a2'_`a3')PA Body-size Analysis.log", replace text
 
 clear
 set scheme cleanplots //cleanplots white_tableau white_w3d //3 options I usually use
 
-use cleaned_noempi
+local cleaned_data "`input_root'/cleaned_noempi.dta"
+capture confirm file "`cleaned_data'"
+if _rc {
+	di as error "Required restricted input not found: `cleaned_data'"
+	exit 601
+}
+use "`cleaned_data'", clear
 
 /* Analysis */ 
 
@@ -148,7 +160,7 @@ time_of_death conts %4.1f \ ///
 time_of_censoring conts %4.1f \ ///
 ) ///
 percent_n percsign("%") iqrmiddle(",") sdleft(" (±") sdright(")") onecol total(before) ///
-saving("Results and Figures/$S_DATE/Table 1 Baseline chars by PA tertile.xlsx", replace)
+saving("`output_dir'/Table 1 Baseline chars by PA tertile.xlsx", replace)
 
 
 
@@ -171,7 +183,7 @@ time_of_death conts %4.1f \ ///
 time_of_censoring conts %4.1f \ /// 
 ) ///
 percent_n percsign("%") iqrmiddle(",") sdleft(" (±") sdright(")") onecol total(before) ///
-saving("Results and Figures/$S_DATE/Table s1 comorbs and utilization by PA tertile.xlsx", replace)
+saving("`output_dir'/Table s1 comorbs and utilization by PA tertile.xlsx", replace)
 
 
 /* How much do ascendingaorta body-size co-vary?*/ 
@@ -1084,5 +1096,4 @@ matlist M, format(%9.4f)
 capture drop mpad_rc* aa_rc* age_rc* paaa100
 
 restore
-
 

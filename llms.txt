@@ -1,0 +1,82 @@
+# CTPA-Dose-Response
+
+Repository: https://github.com/reblocke/CTPA-Dose-Response
+Maintainer: Brian W. Locke, ORCID 0000-0002-3588-5238
+License: MIT for repository code and original documentation.
+
+## Purpose
+
+This repository contains legacy analysis code, exploratory notebooks, data documentation, and an unpublished author manuscript draft for a CTPA dose-response analysis of pulmonary artery size and mortality risk.
+
+The project asks whether pulmonary artery diameter (PAd) and pulmonary artery to ascending aorta ratio (PA:AA) have dose-response associations with mortality after emergency-department computed tomography pulmonary angiography, and whether age/sex normalization changes prognostic interpretation.
+
+## Scholarly Status
+
+Primary citable scholarly record:
+
+- Locke BW, Scarpato B, Bledsoe J, Knox D, Conner K, Stoddard GJ, Cirulis MM, Elliott CG, Dodson MW. Pulmonary Artery Size on CT and Mortality Risk: A Dose-Response Analysis. CHEST. 2023;164(4 Suppl):A6004-A6005. DOI: https://doi.org/10.1016/j.chest.2023.07.3871
+- Public abstract listing: https://reblocke.github.io/talks/
+
+This repository is not tied to a final full journal article. The Markdown manuscript is an unpublished author draft for indexing and review:
+
+- `manuscript/ctpa-dose-response-unpublished-author-draft.md`
+- source DOCX: `manuscript/source/2023-10-10-dose-response-letter.docx`
+
+Related background paper, not the primary citation target:
+
+- Scarpato BM, Locke BW, Bledsoe J, et al. The association between pulmonary artery enlargement and mortality in an Emergency Department population undergoing computed tomography pulmonary angiography. Pulmonary Circulation. 2023;13(2):e12225. DOI: https://doi.org/10.1002/pul2.12225
+
+## Data Restrictions
+
+Restricted patient-level clinical imaging/EHR-derived inputs are not public and must not be committed.
+
+Expected local-only inputs:
+
+- `data/private/final_noempi.dta`
+- `data/private/cleaned_noempi.dta`
+- `data/private/ACCT EMPI BMI Weight Height.csv`
+
+The `noempi` files may be stripped of direct EMPI identifiers but remain patient-level restricted data. Do not add row-level datasets, registry files, PHI, credentials, or collaborator-only materials.
+
+## Workflow
+
+Run from repository root:
+
+```bash
+stata-mp -b do "Data_preprocess.do" "data/private" "outputs/stata"
+stata-mp -b do "Age-Metric Analysis.do" "data/private" "outputs/stata"
+stata-mp -b do "PA Body-size Analysis.do" "data/private" "outputs/stata"
+```
+
+Optional legacy combined script:
+
+```bash
+stata-mp -b do "BL CombofilewithoutEMPI.do" "data/private" "outputs/stata"
+```
+
+Default input root is `data/private`. Default output root is `outputs/stata`. Generated logs, tables, graphs, copied do-files, and derived `.dta` files are written under `outputs/stata/<date>/`.
+
+## Important Files
+
+- `README.md`: human-facing project overview, citation, workflow, data restrictions, and license boundaries.
+- `CITATION.cff`: machine-readable repository and CHEST abstract citation metadata.
+- `AGENTS.md`: instructions for future coding agents.
+- `data_dictionary.md` and `data_dictionary.csv`: expected inputs, derived variables, outcomes, and generated artifacts.
+- `Data_preprocess.do`: restricted-data preprocessing and merge workflow.
+- `Age-Metric Analysis.do`: main age/sex normalization and dose-response survival workflow.
+- `PA Body-size Analysis.do`: body-size and ratio exploratory workflow.
+- `age-sex-norm-letter.ipynb` and `ratio_val_analysis.ipynb`: historical exploratory notebooks with cleared outputs.
+
+## Artifact Policy
+
+Third-party reference PDFs and publisher PDFs are not tracked on the branch tip; use DOI links instead. Historical rendered notebook HTML/PDF exports were archived in GitHub release `legacy-rendered-artifacts-2026-06-04`.
+
+Do not treat release artifacts as canonical reproducible outputs. Reruns require restricted local clinical data.
+
+## Agent Cautions
+
+- Do not rewrite scientific analysis logic unless explicitly requested.
+- Do not describe the manuscript draft as peer reviewed, accepted, or journal-published.
+- Keep the CHEST abstract DOI `10.1016/j.chest.2023.07.3871` as the primary scholarly citation.
+- Keep the Pulmonary Circulation DOI `10.1002/pul2.12225` as related background only.
+- Preserve no-history-rewrite hygiene: remove unsuitable files from branch tips, but do not rewrite git history unless explicitly instructed.

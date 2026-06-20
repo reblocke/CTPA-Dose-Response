@@ -1,18 +1,36 @@
-cd "/Users/blocke/Box Sync/Residency Personal Files/Scholarly Work/Locke Research Projects/Pulm Artery Stuff w Scarps/Local Analysis"
-//cd "/Users/reblocke/Research/CTPA-Dose-Response"
+version 17.0
+args input_root output_root
+if "`input_root'" == "" local input_root "data/private"
+if "`output_root'" == "" local output_root "outputs/stata"
 
-
-capture mkdir "Results and Figures"
-capture mkdir "Results and Figures/$S_DATE/" //make new folder for figure output if needed
-/*capture mkdir "Results and Figures/$S_DATE/Logs/" //new folder for stata logs
+capture mkdir "outputs"
+capture mkdir "`output_root'"
+local output_date = subinstr(strtrim(c(current_date)), " ", "-", .)
+local output_dir "`output_root'/`output_date'"
+capture mkdir "`output_dir'"
+capture mkdir "`output_dir'/Logs"
 local a1=substr(c(current_time),1,2)
 local a2=substr(c(current_time),4,2)
 local a3=substr(c(current_time),7,2)
 local b = "Data_preprocess.do" // do file name
-copy "`b'" "Results and Figures/$S_DATE/Logs/(`a1'_`a2'_`a3')`b'"
-*/ 
+capture copy "`b'" "`output_dir'/Logs/(`a1'_`a2'_`a3')`b'", replace
+capture log close _all
+log using "`output_dir'/Logs/(`a1'_`a2'_`a3')Data_preprocess.log", replace text
 
-use final_noempi, clear
+local final_data "`input_root'/final_noempi.dta"
+local bmi_csv "`input_root'/ACCT EMPI BMI Weight Height.csv"
+capture confirm file "`final_data'"
+if _rc {
+	di as error "Required restricted input not found: `final_data'"
+	exit 601
+}
+capture confirm file "`bmi_csv'"
+if _rc {
+	di as error "Required restricted input not found: `bmi_csv'"
+	exit 601
+}
+
+use "`final_data'", clear
 
 set scheme cleanplots //cleanplots white_tableau white_w3d //3 options I usually use
 
@@ -167,7 +185,7 @@ tab mpaaa_tertile
 
 /******************************************************************
  Merge admin CSV (ACCT/EMPI/BMI/Weight/Height) into cleaned_noempi
- - run this after:  use cleaned_noempi
+ - run this after:  use "`cleaned_data'", clear
 ******************************************************************/
 
 *-- Housekeeping: folders already created above in your script.
@@ -205,7 +223,7 @@ save `MASTER', replace
 *------------------------------------------------------------------
 * 2) USING CSV: import and build the same str# key
 *------------------------------------------------------------------
-import delimited using "ACCT EMPI BMI Weight Height.csv", ///
+import delimited using "`bmi_csv'", ///
     varnames(1) case(lower) clear
 
 * Build acct_key to match master semantics
@@ -309,7 +327,7 @@ preserve
 keep if age_mismatch | bmi_mismatch
 keep acct_no acct_key age_old age_csv age_diff bmi_old bmi_csv bmi_diff male ctdate masterdate admit_dts weight height height_dts weight_dts empi person_mk fcilty_id
 order acct_no acct_key age_old age_csv age_diff bmi_old bmi_csv bmi_diff, first
-export delimited using "Results and Figures/$S_DATE/age_bmi_mismatches_(`a1'_`a2'_`a3').csv", replace
+export delimited using "`output_dir'/age_bmi_mismatches_(`a1'_`a2'_`a3').csv", replace
 restore
 
 
@@ -424,9 +442,9 @@ sum height_cm weight_kg bsa
 preserve
 keep if height_implaus | weight_implaus | bsa_implaus | missing(bsa)
 order acct_no height weight height_cm weight_kg bsa bsa_mosteller bsa_dubois height_unit_guess weight_unit_guess
-capture mkdir "Results and Figures"
-capture mkdir "Results and Figures/$S_DATE"
-export delimited using "Results and Figures/$S_DATE/bsa_qc_(`a1'_`a2'_`a3').csv", replace
+capture mkdir "`output_dir'"
+capture mkdir "`output_dir'"
+export delimited using "`output_dir'/bsa_qc_(`a1'_`a2'_`a3').csv", replace
 restore
 
 
@@ -635,8 +653,7 @@ summ z_aa_wolak z_pa_nevsky z_pa_berger mean_aa sd_aa nev_mean nev_sd berg_mean 
 
 mdesc
 codebook
-save cleaned_noempi, replace
-di as result "Saved merged dataset: cleaned_noempi.dta"
-
+save "`output_dir'/cleaned_noempi.dta", replace
+di as result "Saved merged dataset: `output_dir'/cleaned_noempi.dta"
 
 

@@ -1,5 +1,49 @@
-*.dta
-/Results and Figures
-*.gph
-*.stswp
+# Restricted clinical data
+data/
+Data/
+private/
+final_noempi.dta
+cleaned_noempi.dta
+finalwithfollowupandcovariates_noempi.dta
 ACCT EMPI BMI Weight Height.csv
+*.dta
+
+# Generated analysis outputs
+outputs/
+Results and Figures/
+*.log
+*.smcl
+*.gph
+*.ster
+*.xlsx
+*.xls
+*.csv
+*.png
+*.tif
+*.tiff
+*.pdf
+*.html
+
+# Keep source notebooks and manuscript source documents tracked when explicitly added.
+!*.ipynb
+!data_dictionary.csv
+!manuscript/**/*.docx
+
+# Local and editor artifacts
+.DS_Store
+Thumbs.db
+*.stswp
+*.swp
+*.swo
+.Rhistory
+.RData
+.Rproj.user/
+.ipynb_checkpoints/
+.idea/
+.vscode/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
